@@ -10,13 +10,12 @@ export type AuthResponse = { user: NovaUser };
 export type UsersResponse = { users: NovaUser[] };
 
 async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  if (options.body !== undefined) headers.set('Content-Type', 'application/json');
   const response = await fetch(url, {
-    credentials: 'same-origin',
     ...options,
-    headers: {
-      ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...options.headers
-    }
+    credentials: 'same-origin',
+    headers
   });
   const body: unknown = await response.json();
   if (!response.ok) {
