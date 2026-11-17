@@ -50,3 +50,18 @@ export function provisionUser(name: string,email: string,password: string): Prom
 export function signOut(): Promise<{ok:boolean}> {
   return apiRequest('/api/auth/logout',{method:'POST',body:'{}'});
 }
+
+export interface DirectMessage { id: number; sender: number; text: string; created_at: string; }
+export interface CalendarEvent { id: number; title: string; date: string; time: string; duration: number; attendees: string[]; link: string; type: string; }
+export function getMessages(peer: number): Promise<{messages: DirectMessage[]}> {
+  return apiRequest('/api/messages?peer=' + encodeURIComponent(String(peer)));
+}
+export function postMessage(peer: number, text: string): Promise<{message: DirectMessage}> {
+  return apiRequest('/api/messages?peer=' + encodeURIComponent(String(peer)), {method:'POST',body:JSON.stringify({text})});
+}
+export function getCalendarEvents(): Promise<{events: CalendarEvent[]}> {
+  return apiRequest('/api/calendar');
+}
+export function postCalendarEvent(event: {title:string;date:string;time:string;duration:number}): Promise<{event: CalendarEvent}> {
+  return apiRequest('/api/calendar',{method:'POST',body:JSON.stringify(event)});
+}
