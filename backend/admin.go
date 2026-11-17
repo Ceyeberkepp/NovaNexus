@@ -51,7 +51,7 @@ func (s *Server) adminUsersAPI(w http.ResponseWriter,r *http.Request){
  }
  if _,e=tx.Exec(r.Context(),"UPDATE users SET name=CASE WHEN $2='' THEN name ELSE $2 END,role=CASE WHEN $3='' THEN role ELSE $3 END,active=COALESCE($4,active) WHERE id=$1",id,strings.TrimSpace(c.Name),c.Role,c.Active);e!=nil{fail(w,500,"Update failed");return}
  // Invalidate sessions after role or active-status changes.
- if c.Role!=""||c.Active!=nil{if _,e=tx.Exec(r.Context(),"DELETE FROM sessions WHERE user_id=$1",id);e!=nil{fail(w,500,"Could not revoke sessions");return}}
+ if (c.Role!=""&&c.Role!=existingRole)||(c.Active!=nil&&*c.Active!=active){if _,e=tx.Exec(r.Context(),"DELETE FROM sessions WHERE user_id=$1",id);e!=nil{fail(w,500,"Could not revoke sessions");return}}
  if e=tx.Commit(r.Context());e!=nil{fail(w,500,"Update failed");return}
  s.audit(r,actor.ID,"user.updated",strconv.FormatInt(id,10))
  respond(w,200,map[string]any{"ok":true})
