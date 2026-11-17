@@ -2,10 +2,17 @@ import React,{useState} from 'react';
 import {Bell,Monitor,Layout,Cpu,PhoneCall,Edit2,Check,AlertTriangle,Volume2} from 'lucide-react';
 
 const defaults={
- theme:'Onyx',clock24:false,nameDisplay:'username',showPresence:false,timezone:'automatic',
+ theme:'Onyx',background:'solid',clock24:false,nameDisplay:'username',showPresence:false,timezone:'automatic',
  dmCount:40,sort:'recent',groupUnread:false,sendCtrlEnter:false,
  desktopNotifications:false,notificationSound:'none',
  callMicEnabled:true,callCamEnabled:true,callQuality:'720p',
+};
+export const chatBackgrounds={
+ solid:{label:'Solid',backgroundImage:'none'},
+ aurora:{label:'Aurora',backgroundImage:'radial-gradient(ellipse at 10% 15%,rgba(99,102,241,0.17),transparent 55%),radial-gradient(ellipse at 85% 80%,rgba(45,212,191,0.15),transparent 50%)'},
+ dots:{label:'Dots',backgroundImage:'radial-gradient(rgba(100,116,139,0.16) 1px,transparent 1px)',backgroundSize:'22px 22px'},
+ grid:{label:'Grid',backgroundImage:'linear-gradient(rgba(100,116,139,0.10) 1px,transparent 1px),linear-gradient(90deg,rgba(100,116,139,0.10) 1px,transparent 1px)',backgroundSize:'28px 28px'},
+ waves:{label:'Waves',backgroundImage:'repeating-radial-gradient(circle at 0% 100%,transparent 0,transparent 18px,rgba(99,102,241,.08) 19px,transparent 22px)'}
 };
 export const chatThemes={Onyx:'#1e1e1e',Quartz:'#f8fafc',Indigo:'#eef2ff',Ruby:'#fff1f2'};
 export function readChatPreferences(userId){
@@ -59,6 +66,11 @@ export default function ChatPreferences({userId,initial,onClose,onSave}){
        <div className="mb-6 rounded-xl border border-white/5 bg-[#252526] p-5">
         <div className="mb-4 text-sm font-bold text-white">Theme</div>
         <div className="grid grid-cols-4 gap-3">{Object.entries(chatThemes).map(([name,color])=><button key={name} onClick={()=>change('theme',name)} className="group text-center text-[10px] font-semibold"><span style={{background:color}} className={'mb-2 block h-16 rounded-md border-2 '+(settings.theme===name?'border-indigo-500':'border-transparent')}/>{name}</button>)}</div>
+       </div>
+       <div className="mb-6 rounded-xl border border-white/5 bg-[#252526] p-5">
+        <div className="mb-3 text-sm font-bold text-white">Chat Background</div>
+        <p className="mb-4 text-[11px] text-slate-400">Choose an actual conversation background. It updates when you save and stays selected in this browser.</p>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{Object.entries(chatBackgrounds).map(([key,bg])=><button key={key} type="button" onClick={()=>change('background',key)} aria-pressed={(settings.background||'solid')===key} className="text-center text-[10px] font-semibold"><span style={{backgroundColor:chatThemes[settings.theme]||'#f8fafc',backgroundImage:bg.backgroundImage,backgroundSize:bg.backgroundSize}} className={'mb-2 block h-14 rounded-lg border-2 '+((settings.background||'solid')===key?'border-indigo-500':'border-transparent')}/>{bg.label}</button>)}</div>
        </div>
        <SettingRow label="Clock Display" detail="Choose the 12-hour or 24-hour format for message timestamps."><Choice value={settings.clock24?'24':'12'} onChange={v=>change('clock24',v==='24')} values={[[ '12','12-hour' ],[ '24','24-hour' ]]}/></SettingRow>
        <SettingRow label="Teammate Name Display" detail="Choose whether to display names or email addresses in the chat sidebar."><Choice value={settings.nameDisplay} onChange={v=>change('nameDisplay',v)} values={[[ 'username','Display name' ],[ 'email','Email address' ]]}/></SettingRow>
