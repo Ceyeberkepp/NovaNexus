@@ -1,6 +1,7 @@
 import React, {useEffect,useState} from 'react';
 import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-react';
 import VideoSettings from './VideoSettings';
+import MeetingExtras from './MeetingExtras';
 import {readChatPreferences} from './ChatPreferences';
 import '@livekit/components-styles';
 
@@ -56,6 +57,7 @@ export default function MeetingRoom({roomId,user,onEnd}) {
       onError={(e)=>setError(e?.message||'Connection failed')}
       style={{height:'100%'}}>
       <VideoConference />
+      <MeetingExtras roomId={roomId} maxParticipants={connection.maxParticipants}/>
       {showSettings&&<ConnectedSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
     </LiveKitRoom>
     {error&&<div role="alert" className="fixed bottom-6 left-6 z-50 bg-red-800 text-white p-3 rounded-lg">{error}</div>}
