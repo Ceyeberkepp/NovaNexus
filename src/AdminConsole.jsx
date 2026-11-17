@@ -15,7 +15,8 @@ export default function AdminConsole({users,setUsers}){
  const [tab,setTab]=useState('users');
  const [notice,setNotice]=useState('');
  const [loading,setLoading]=useState(false);
- const [resetResult,setResetResult]=useState(null);
+ const [resetTarget,setResetTarget]=useState(null);
+ const [resetForm,setResetForm]=useState({newPassword:'',confirmPassword:'',adminPassword:'',requireChange:true});
  const [form,setForm]=useState({name:'',email:'',password:''});
  const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',session_minutes:'480',waiting_room_enabled:'false',waiting_room_message:'Please wait for your host to admit you.',ai_enabled:'true'});
  const [logs,setLogs]=useState([]);
@@ -34,11 +35,17 @@ export default function AdminConsole({users,setUsers}){
   catch(e){setNotice(e.message);}
   finally{setLoading(false);}
  }
- async function resetPassword(user){
-  if(!window.confirm('Generate a new temporary password and revoke all sessions for '+user.email+'?'))return;
-  setLoading(true);setNotice('');setResetResult(null);
-  try{const response=await adminRequest('reset-password',{method:'POST',body:JSON.stringify({userID:user.id})});setResetResult({user:user.email,password:response.temporaryPassword});await refresh();}
-  catch(e){setNotice(e.message);}finally{setLoading(false);}
+ async function resetPassword(e){
+  e.preventDefault();
+  if(!resetTarget)return;
+  if(resetForm.newPassword.length<8||resetForm.newPassword.length>1024){setNotice('New password must contain at least 8 characters.');return;}
+  if(resetForm.newPassword!==resetForm.confirmPassword){setNotice('New passwords do not match.');return;}
+  setLoading(true);setNotice('');
+  try{
+   await adminRequest('reset-password',{method:'POST',body:JSON.stringify({userID:resetTarget.id,newPassword:resetForm.newPassword,adminPassword:resetForm.adminPassword})});
+   setResetTarget(null);setResetForm({newPassword:'',confirmPassword:'',adminPassword:'',requireChange:true});
+   await refresh();setNotice('Password changed; all prior sessions revoked. The member must choose a new password on first sign-in.');
+  }catch(error){setNotice(error.message)}finally{setLoading(false)}
  }
  async function createAccount(e){
   e.preventDefault();
@@ -77,7 +84,18 @@ export default function AdminConsole({users,setUsers}){
     </div>
     <nav className="flex gap-6 overflow-x-auto border-b border-slate-100 mb-9 no-scrollbar" aria-label="Administration sections">{tabs.map(([key,label,Icon])=><button key={key} onClick={()=>setTab(key)} className={'flex shrink-0 items-center gap-2 px-1 pb-4 pt-2 text-[10px] font-black uppercase tracking-widest '+(tab===key?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-500')}><Icon size={14}/>{label}</button>)}</nav>
     {notice&&<div role="status" className="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">{notice}</div>}
-    {resetResult&&<div role="status" className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm"><strong>Temporary password for {resetResult.user}</strong><p className="mt-2 text-xs text-amber-800">Share securely. This secret is shown only once; previous sessions were revoked and the member must change it on next sign-in.</p><div className="mt-3 flex gap-3 items-center flex-wrap"><code className="rounded-lg border bg-white p-3 break-all">{resetResult.password}</code><button type="button" className="text-indigo-700 font-bold" onClick={()=>navigator.clipboard.writeText(resetResult.password)}>Copy password</button><button type="button" className="text-slate-500" onClick={()=>setResetResult(null)}>Dismiss</button></div></div>}
+    {resetTarget&&<div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Set member password">
+     <form className="w-full max-w-lg space-y-4 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-2xl" onSubmit={resetPassword}>
+      <h2 className="text-xl font-black text-slate-900">Set a new password</h2>
+      <p className="text-sm text-slate-500">Member: <strong>{resetTarget.name}</strong> ({resetTarget.email})</p>
+      <p className="text-xs text-indigo-700">You choose the password here. No random password will be generated. Existing sign-in sessions will be revoked.</p>
+      <label className="block text-sm font-semibold">New password (at least 8 characters)<input autoFocus className={input+' mt-2'} type="password" autoComplete="new-password" minLength={8} maxLength={1024} required value={resetForm.newPassword} onChange={e=>setResetForm(x=>({...x,newPassword:e.target.value}))}/></label>
+      <label className="block text-sm font-semibold">Confirm new password<input className={input+' mt-2'} type="password" autoComplete="new-password" minLength={8} maxLength={1024} required value={resetForm.confirmPassword} onChange={e=>setResetForm(x=>({...x,confirmPassword:e.target.value}))}/></label>
+      <label className="block text-sm font-semibold">Your administrator password (authorize change)<input className={input+' mt-2'} type="password" autoComplete="current-password" required value={resetForm.adminPassword} onChange={e=>setResetForm(x=>({...x,adminPassword:e.target.value}))}/></label>
+      <p className="text-xs text-slate-500">For security, the member will be required to change the password after signing in. This cannot be disabled in the admin reset flow.</p>
+      <div className="flex flex-wrap justify-end gap-3"><button type="button" disabled={loading} onClick={()=>{setResetTarget(null);setResetForm({newPassword:'',confirmPassword:'',adminPassword:'',requireChange:true});}} className="rounded-xl border p-3 text-sm font-bold">Cancel</button><button disabled={loading||resetForm.newPassword.length<8||resetForm.newPassword!==resetForm.confirmPassword||!resetForm.adminPassword} className={btn}>Save password</button></div>
+     </form>
+    </div>}
     {tab==='users'&&<div className="grid gap-8 lg:grid-cols-[300px_1fr]">
       <form onSubmit={createAccount} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-5 h-fit">
        <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-3"><UserPlus size={17} className="text-indigo-600"/>Provision Identity</h2>
@@ -88,7 +106,7 @@ export default function AdminConsole({users,setUsers}){
       </form>
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-x-auto">
        <table className="w-full text-left text-sm"><thead><tr className="border-b bg-slate-50"><th className="p-4">Name / email</th><th className="p-4">Role</th><th className="p-4">Account</th><th className="p-4">Actions</th></tr></thead><tbody>
-        {users.map(u=><UserRow key={u.id} user={u} busy={loading} update={updateAccount} onReset={resetPassword}/>)}
+        {users.map(u=><UserRow key={u.id} user={u} busy={loading} update={updateAccount} onReset={setResetTarget}/>)}
        </tbody></table>
       </div>
     </div>}
