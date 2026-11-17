@@ -33,7 +33,7 @@ For installation details, supported environments and known blockers see [INSTALL
 | --- | --- |
 | Workspace interface | React UI prototype imported |
 | Authentication and permissions | Go / PostgreSQL implementation merged; further security testing required |
-| Administrator onboarding | Initial setup-code and password-change implementation merged |
+| Administrator onboarding | Unique initial password with mandatory password change |
 | Database | PostgreSQL container bundled with application |
 | REST API | Go authentication/user-management API merged; broader APIs remain unimplemented |
 | HTTPS | Caddy HTTPS proxy bundled; real-domain certificate test outstanding |
@@ -83,8 +83,7 @@ The foundational Go/HTTPS installer changes were merged in [production-hardening
 The development installer provisions the requested first-login credentials:
 
 - **Username:** `admin`
-- **Temporary password:** `admin`
-- **Additional verification:** a unique, randomly generated, installation-specific setup code
+- **Temporary password:** unique random password displayed by the installer (no setup code)
 - **First-login requirement:** change the temporary password before the workspace dashboard becomes available
 
 The known default credentials must **not** provide unrestricted access. Administrator recovery, MFA, and broader account security still require review before public deployment.
