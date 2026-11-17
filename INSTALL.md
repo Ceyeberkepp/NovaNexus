@@ -2,8 +2,7 @@
 
 **Release status:** The Go API, PostgreSQL database, HTTPS reverse proxy and
 frontend are packaged together. This is **not** a production-ready collaboration
-platform yet: live video, messaging, scheduling, MCP and related integrations
-remain unfinished. Do not publish a live instance until release testing passes.
+platform yet: the media SFU and authenticated direct messaging and personal calendar are integrated, while guest meeting access, scaled webinar moderation, MFA, MCP and related integrations remain unfinished. Do not publish a live instance until release testing passes.
 
 ## Why Docker is included
 
@@ -35,6 +34,12 @@ This is not yet production-certified. Docker must be permitted by the VM/contain
 Ubuntu/Debian x86_64 or ARM64, root privileges, systemd, outbound package and container-registry access, and free TCP ports 80 and 443. The auto-detected IP must be reachable from the browser. On public DNS mode, a public address and certificate email are needed.
 
 A one-command installer cannot override host networking or virtualization restrictions. IP-only mode provides encrypted HTTPS with a **private**, not publicly trusted, CA; user devices require a one-time trust setup to eliminate warnings. The app still has unfinished features and must not be treated as production-ready.
+
+## Video conference media (development preview)
+
+NovaNexus includes a self-hosted LiveKit SFU. The installer generates a local-only `livekit.yaml` and separate private API credentials, then starts the media service with the application. **Do not commit `livekit.yaml` or share the server secret.** Signaling is proxied over the same browser HTTPS address. WebRTC media uses **7882/UDP** (primary) and **7881/TCP** (fallback) on the host; clients need network access to these ports. For IP HTTPS, client devices must trust the generated NovaNexus root CA or browser media permissions and secure WebSockets can fail.
+
+A room can be configured for **1–1000** participants; this setting is not a load-tested guarantee. A single host, LXC networking, NAT or firewall may limit actual participants severely. Test camera, microphone, screen sharing, host moderation and bandwidth before any public deployment. This is not yet a 1000-person webinar product: no guaranteed video capacity, guest lobby, TURN scaling, recording or server-side egress has been validated.
 
 ## First-time administrator
 
