@@ -61,6 +61,7 @@ jobs:
           sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
           NOVANEXUS_DOMAIN=127.0.0.1 docker compose up -d https
           docker compose ps --status running livekit
+          docker compose exec -T ollama ollama list >/dev/null
           docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           for n in $(seq 1 30); do
             if docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > /tmp/novanexus-local-ca.crt 2>/dev/null && test -s /tmp/novanexus-local-ca.crt; then
