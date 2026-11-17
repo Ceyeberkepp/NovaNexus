@@ -38,7 +38,7 @@ func (s *Server) calendarAPI(w http.ResponseWriter,r *http.Request){
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
  if u.MustChange{fail(w,403,"Password change required");return}
  if r.Method=="GET"{
-  rows,e:=s.db.Query(r.Context(),"SELECT id,title,event_date,event_time,duration_minutes FROM calendar_events WHERE owner_id=$1 ORDER BY event_date,event_time LIMIT 1000",u.ID)
+  rows,e:=s.db.Query(r.Context(),"SELECT id,title,event_date::text,event_time::text,duration_minutes FROM calendar_events WHERE owner_id=$1 ORDER BY event_date,event_time LIMIT 1000",u.ID)
   if e!=nil{fail(w,500,"Calendar unavailable");return}
   defer rows.Close()
   items:=make([]map[string]any,0)
