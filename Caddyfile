@@ -1,10 +1,10 @@
 {
     email {$TLS_EMAIL}
     admin off
-    # IP-address HTTPS clients typically omit SNI. Use the configured site as the default.
+    # IP-only HTTPS clients may omit SNI. Preserve local IP access.
     default_sni {$NOVANEXUS_DOMAIN}
 }
-{$NOVANEXUS_DOMAIN} {
+(novanexus_routes) {
     encode zstd gzip
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -23,3 +23,8 @@
         reverse_proxy app:3000
     }
 }
+{$NOVANEXUS_DOMAIN} {
+    import novanexus_routes
+}
+# The installer renders this file. Keep it present even on LAN-only deployments.
+import /etc/caddy/additional-sites.caddy
