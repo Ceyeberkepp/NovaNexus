@@ -22,7 +22,6 @@ export default function AdminConsole({users,setUsers}){
  const [groupForm,setGroupForm]=useState({name:'',description:''});
  useEffect(()=>{refresh();},[]);
  async function refresh(){
-  setNotice('');
   try{
    const [directory,config,audit,groupData]=await Promise.all([adminRequest('directory'),adminRequest('settings'),adminRequest('logs'),adminRequest('groups')]);
    setUsers(directory.users);setSettings({...settings,...config.settings});setLogs(audit.events);setGroups(groupData.groups);
@@ -30,7 +29,7 @@ export default function AdminConsole({users,setUsers}){
  }
  async function execute(fn){
   setLoading(true);setNotice('');
-  try{await fn();setNotice('Changes saved successfully.');await refresh();}
+  try{await fn();await refresh();setNotice('Changes saved successfully.');window.dispatchEvent(new Event('novanexus:branding-changed'));}
   catch(e){setNotice(e.message);}
   finally{setLoading(false);}
  }
