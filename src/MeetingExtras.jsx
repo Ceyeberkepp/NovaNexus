@@ -3,7 +3,7 @@ import {useRoomContext} from '@livekit/components-react';
 import {RoomEvent} from 'livekit-client';
 import {Disc,Square,Users,Cast,Monitor,MoreVertical,Settings,Link2,DoorOpen,Plus,Trash2,ArrowLeft} from 'lucide-react';
 
-export default function MeetingExtras({roomId,maxParticipants,user,isHost,onOpenSettings,onSwitchBreakout,activeBreakoutId=0}){
+export default function MeetingExtras({shareUrl,roomId,maxParticipants,user,isHost,onOpenSettings,onSwitchBreakout,activeBreakoutId=0}){
  const room=useRoomContext();
  const [participants,setParticipants]=useState(1);
  const [expanded,setExpanded]=useState(false);
@@ -84,8 +84,8 @@ export default function MeetingExtras({roomId,maxParticipants,user,isHost,onOpen
   }catch(e){setNotice(e.message)}
  }
  async function copyLink(){
-  try{await navigator.clipboard.writeText(window.location.origin+'/'+roomId);setNotice('Meeting link copied.');}
-  catch{setNotice('Copy this meeting link: '+window.location.origin+'/'+roomId)}
+  try{await navigator.clipboard.writeText(shareUrl||window.location.origin+'/'+roomId);setNotice('Meeting link copied.');}
+  catch{setNotice('Copy this meeting link: '+(shareUrl||window.location.origin+'/'+roomId))}
  }
 
  return <div className="fixed bottom-4 right-4 z-[60] max-w-[min(370px,94vw)] text-white text-xs">
