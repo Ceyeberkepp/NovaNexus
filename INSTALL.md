@@ -35,6 +35,35 @@ For safer operation, download the script separately, inspect it and verify
 its release integrity before running it as root. Avoid piping unreviewed
 moving-branch code into sudo.
 
+### Minimal Debian 13 / root shell
+
+Minimal Debian containers and hosts may not include `sudo` or `curl`. If your
+prompt is `root@server:~#`, you are already root: run the script with `bash`,
+not `sudo`. First install the bootstrap downloader:
+
+```bash
+apt clean
+rm -rf /var/lib/apt/lists/*
+apt update
+apt install -y ca-certificates curl
+```
+
+The `404 Not Found` error for a Debian `.deb` package typically indicates
+outdated package metadata or an out-of-sync mirror. If `apt update` fails,
+repair its repository configuration before continuing rather than bypassing
+signature verification or downloading random package files.
+
+Then download, inspect and execute the reviewed script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh
+bash -n /root/novanexus-install.sh
+bash /root/novanexus-install.sh
+```
+
+Use an audited release tag when one exists. This remains a development-preview
+path, not a certified production installation.
+
 ## Prompts and prerequisites
 
 The installer asks only for the public DNS name and TLS registration email,
