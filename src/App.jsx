@@ -1157,12 +1157,58 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
     const [messages, setMessages] = useState({});
     const [chatError, setChatError] = useState("");
     const [prefs,setPrefs] = useState(()=>readChatPreferences(currentUser?.id||0));
+    const [recentMap,setRecentMap] = useState({});
+    const lastSeenRef=useRef({});
+    const formatMessageTime=createdAt=>new Date(createdAt).toLocaleTimeString([],{
+      hour:'2-digit',minute:'2-digit',hour12:!prefs.clock24,
+      ...(prefs.timezone==='UTC'?{timeZone:'UTC'}:{})
+    });
     useEffect(()=>{
-      if (!selectedChat || selectedChat.members) return;
-      let live=true;
-      getMessages(Number(selectedChat.id)).then(data=>{if(live)setMessages(previous=>({...previous,[selectedChat.id]:data.messages.map(m=>({id:m.id,text:m.text,sender:m.sender===Number(currentUser?.id)?"me":String(m.sender),time:new Date(m.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",hour12:!prefs.clock24})}))}));}).catch(e=>{if(live)setChatError(e.message);});
-      return ()=>{live=false;};
-    },[selectedChat,currentUser?.id,prefs.clock24]);
+      let active=true;
+      async function refreshRecent(){
+        try{const r=await fetch('/api/messages/recent',{credentials:'same-origin'});
+          if(!r.ok)return;const data=await r.json();
+          if(active)setRecentMap(Object.fromEntries((data.recent||[]).map(v=>[v.peer,new Date(v.last).getTime()])));
+        }catch{}
+      }
+      refreshRecent();const timer=setInterval(refreshRecent,15000);
+      return ()=>{active=false;clearInterval(timer)};
+    },[currentUser?.id]);
+    useEffect(()=>{
+      if(!selectedChat||selectedChat.members)return;
+      const peer=Number(selectedChat.id);
+      if(!Number.isInteger(peer))return;
+      let active=true;
+      async function poll(){
+        try{
+          const data=await getMessages(peer);
+          if(!active)return;
+          const list=data.messages||[];
+          const newest=Math.max(0,...list.map(m=>Number(m.id)));
+          const lastSeen=lastSeenRef.current[peer];
+          if(lastSeen!==undefined&&newest>lastSeen){
+            const inbound=list.find(m=>Number(m.id)>lastSeen&&Number(m.sender)!==Number(currentUser?.id));
+            if(inbound&&prefs.desktopNotifications&&'Notification' in window&&Notification.permission==='granted'){
+              new Notification(selectedChat.name||'New message',{body:String(inbound.text).slice(0,120)});
+              if(prefs.notificationSound==='gentle')try{
+                const context=new (window.AudioContext||window.webkitAudioContext)();
+                const osc=context.createOscillator(),gain=context.createGain();
+                osc.connect(gain);gain.connect(context.destination);
+                gain.gain.value=0.04;osc.frequency.value=600;osc.start();osc.stop(context.currentTime+0.1);
+                osc.onended=()=>context.close();
+              }catch{}
+            }
+          }
+          lastSeenRef.current[peer]=Math.max(lastSeen||0,newest);
+          setMessages(previous=>({...previous,[peer]:list.map(m=>({
+            id:m.id,text:m.text,sender:Number(m.sender)===Number(currentUser?.id)?'me':String(m.sender),
+            timestamp:m.created_at,time:formatMessageTime(m.created_at)
+          }))}));
+        }catch(e){if(active)setChatError(e.message);}
+      }
+      poll();const timer=setInterval(poll,8000);
+      return ()=>{active=false;clearInterval(timer)};
+    },[selectedChat?.id,currentUser?.id,prefs.clock24,prefs.timezone,prefs.desktopNotifications,prefs.notificationSound]);
     const [inputText, setInputText] = useState('');
     const [groups, setGroups] = useState([]);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -1191,7 +1237,9 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
       setChatError("");
       try {
         const result=await postMessage(Number(selectedChat.id),inputText.trim());
-        setMessages(previous=>({...previous,[selectedChat.id]:[...(previous[selectedChat.id]||[]),{id:result.message.id,text:result.message.text,sender:"me",time:new Date(result.message.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",hour12:!prefs.clock24})}]}));
+        setMessages(previous=>({...previous,[selectedChat.id]:[...(previous[selectedChat.id]||[]),{id:result.message.id,text:result.message.text,sender:"me",timestamp:result.message.created_at,time:formatMessageTime(result.message.created_at)}]}));
+        lastSeenRef.current[Number(selectedChat.id)]=Math.max(lastSeenRef.current[Number(selectedChat.id)]||0,Number(result.message.id));
+        setRecentMap(p=>({...p,[Number(selectedChat.id)]:Date.now()}));
         setInputText("");
       } catch(e){setChatError(e.message||"Message not sent");}
     };
@@ -1213,7 +1261,12 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
 
     // Filter Lists
     const favUsers = users.filter(u => favorites.includes(u.id));
-    const dmUsers = users.filter(u => u.active!==false&&!favorites.includes(u.id)).sort((a,b)=>String(prefs.sort==='role'?a.role:a.name).localeCompare(String(prefs.sort==='role'?b.role:b.name))).slice(0,prefs.dmCount);
+    const dmUsers=users.filter(u=>u.active!==false&&!favorites.includes(u.id)).sort((a,b)=>{
+      if(prefs.sort==='recent'){const diff=(recentMap[b.id]||0)-(recentMap[a.id]||0);if(diff)return diff;}
+      const aa=String(prefs.sort==='role'?a.role:(prefs.nameDisplay==='email'?a.email:a.name));
+      const bb=String(prefs.sort==='role'?b.role:(prefs.nameDisplay==='email'?b.email:b.name));
+      return aa.localeCompare(bb);
+    }).slice(0,prefs.dmCount);
     const teamsList = groups.filter(g => g.type === 'Team');
     const groupsList = groups.filter(g => g.type === 'Group');
 
@@ -1232,7 +1285,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                 )}
             </div>
             <div className="ml-3 hidden md:block overflow-hidden">
-                <span className="text-[12px] font-bold block text-slate-800 truncate">{item.name}</span>
+                <span className="text-[12px] font-bold block text-slate-800 truncate">{isUser&&prefs.nameDisplay==='email'?item.email:item.name}</span>
                 <span className="text-[10px] text-slate-400 font-medium truncate capitalize">{isUser ? item.role : `${item.members.length} members`}</span>
             </div>
         </div>
