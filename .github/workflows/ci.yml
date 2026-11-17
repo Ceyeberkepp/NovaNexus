@@ -22,6 +22,8 @@ jobs:
     env:
       DATABASE_URL: postgres://novanexus:test_password_only@127.0.0.1:5432/novanexus
       BOOTSTRAP_ADMIN_PASSWORD: integration-test-temporary-administrator-password-very-long
+      LIVEKIT_API_KEY: novanexus
+      LIVEKIT_API_SECRET: integration-test-livekit-secret-with-32-or-more-characters
       NODE_ENV: development
       PORT: 3000
     steps:
@@ -82,5 +84,15 @@ jobs:
           curl -fsS -c /tmp/nova-second-cookie -H 'Content-Type: application/json' -d '{"email":"second@local.invalid","password":"12345678"}' "$base/api/auth/login" > /tmp/nova-second-login.json
           curl -fsS -b /tmp/nova-second-cookie "$base/api/messages?peer=1" | grep -q 'Hello from backend integration'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie "$base/api/calendar")" = "200"
+      - name: Verify meeting token access and 1000-user policy
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:3000
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"room":"TeamDemo","maxParticipants":1000}' "$base/api/meetings/token")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"TeamDemo","maxParticipants":1001}' "$base/api/meetings/token")" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"invalid room","maxParticipants":50}' "$base/api/meetings/token")" = "400"
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"TeamDemo","maxParticipants":1000}' "$base/api/meetings/token" > /tmp/meeting-token.json
+          python3 -c 'import json,base64;v=json.load(open("/tmp/meeting-token.json"));p=v["token"].split("."); assert len(p)==3;claims=json.loads(base64.urlsafe_b64decode(p[1]+"==="));assert claims["video"]["room"]=="TeamDemo";assert claims["roomConfig"]["maxParticipants"]==1000;assert v["maxParticipants"]==1000'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"SmallMeeting","maxParticipants":1}' "$base/api/meetings/token" | grep -q '"maxParticipants":1'
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
