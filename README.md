@@ -16,7 +16,7 @@ NovaNexus is being built as a secure, self-hosted environment for teams and admi
 apt-get update && apt-get install -y ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh && bash /root/novanexus-install.sh
 ```
 
-This single command installs the bootstrap downloader if needed, then launches the installer. The installer automatically installs the remaining packages, Docker/Compose, PostgreSQL, Go backend, React frontend, and Caddy HTTPS. **You do not manually configure Docker or the database.** On systems already containing `curl`, you may use only the download-and-run portion. Review the downloaded installer before running untrusted code as root.
+This single command installs the bootstrap downloader if needed, then launches the installer. The installer automatically installs the remaining packages and configures **Docker's official APT repository** to install Engine, Buildx, Compose, and containerd. It then builds the Go backend and React frontend, and starts PostgreSQL and Caddy HTTPS. **You do not manually configure Docker or the database.** On systems already containing `curl`, you may use only the download-and-run portion. Review the downloaded installer before running untrusted code as root.
 
 **No domain required:** the installer detects the host IPv4 address and configures `https://SERVER_IP` using a private local TLS certificate authority. On other devices the root CA must be trusted to avoid certificate warnings. A public DNS name can be specified with `NOVANEXUS_DOMAIN` if preferred, with a publicly issued TLS certificate subject to DNS and port requirements. It does not automatically create DNS or modify upstream router/firewall settings.
 
