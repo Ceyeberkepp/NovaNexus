@@ -139,6 +139,9 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/branding":publicBrandingAPI(s,w,r)
  case "/api/admin/branding":s.adminBrandingAPI(w,r)
  case "/api/health":if e:=s.db.Ping(r.Context());e!=nil{fail(w,503,"Database unavailable")}else{respond(w,200,map[string]any{"status":"ok"})}
+ case "/api/meetings/create":s.createMeetingAPI(w,r)
+ case "/api/meetings/breakouts":s.breakoutAPI(w,r)
+ case "/api/calls":s.callsAPI(w,r)
  case "/api/meetings/token":s.meetingTokenAPI(w,r)
  case "/api/messages/recent":s.recentMessagesAPI(w,r)
  case "/api/messages":s.messagesAPI(w,r)
@@ -163,6 +166,63 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "CREATE TABLE IF NOT EXISTS group_members (group_id BIGINT NOT NULL REFERENCES workspace_groups(id) ON DELETE CASCADE,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(group_id,user_id))",
   "CREATE TABLE IF NOT EXISTS direct_messages (id BIGSERIAL PRIMARY KEY,sender_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   "CREATE INDEX IF NOT EXISTS direct_messages_pair_idx ON direct_messages(sender_id,recipient_id,id DESC)",
+  "CREATE TABLE IF NOT EXISTS meeting_rooms (room VARCHAR(8) PRIMARY KEY CHECK(room ~ '^[0-9]{8}
+  "CREATE INDEX IF NOT EXISTS calendar_events_owner_date_idx ON calendar_events(owner_id,event_date,event_time)",
+ }
+ for _,query:=range statements {if _,e:=db.Exec(ctx,query);e!=nil{return e}}
+ return nil
+}
+func main() {
+ ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second);defer cancel()
+ db,err:=pgxpool.New(ctx,os.Getenv("DATABASE_URL"));if err!=nil{log.Fatal(err)}
+ if err=db.Ping(ctx);err!=nil{log.Fatal(err)}
+ if err=migrate(ctx,db);err!=nil{log.Fatal(err)}
+ adminPassword:=os.Getenv("BOOTSTRAP_ADMIN_PASSWORD")
+ if len(adminPassword)<24 {log.Fatal("BOOTSTRAP_ADMIN_PASSWORD must be a unique randomly generated password of at least 24 characters")}
+ s:=&Server{db:db,secure:os.Getenv("NODE_ENV")=="production",attempts:make(map[string][]time.Time)}
+ var count int
+ if e:=db.QueryRow(ctx,"SELECT count(*) FROM users WHERE role='Admin'").Scan(&count);e!=nil{log.Fatal(e)}
+ if count==0 {
+  _,err=db.Exec(ctx,"INSERT INTO users(name,email,password_hash,role,must_change_password) VALUES('Administrator','admin@local.invalid',$1,'Admin',TRUE)",passwordHash(adminPassword))
+  if err!=nil{log.Fatal(err)}
+ } else {
+  // Upgrade a pending legacy admin/admin + setup-code installation without exposing a default password.
+  // Once the password is changed, must_change_password is FALSE and this migration no longer applies.
+  var adminID int64
+  var stored string
+  e:=db.QueryRow(ctx,"SELECT id,password_hash FROM users WHERE email='admin@local.invalid' AND role='Admin' AND must_change_password=TRUE AND active=TRUE").Scan(&adminID,&stored)
+  if e==nil && !verifyPassword(adminPassword,stored) {
+   tx,te:=db.Begin(ctx);if te!=nil{log.Fatal(te)}
+   if _,te=tx.Exec(ctx,"UPDATE users SET password_hash=$1 WHERE id=$2 AND must_change_password=TRUE",passwordHash(adminPassword),adminID);te!=nil{_ =tx.Rollback(ctx);log.Fatal(te)}
+   if _,te=tx.Exec(ctx,"DELETE FROM sessions WHERE user_id=$1",adminID);te!=nil{_ =tx.Rollback(ctx);log.Fatal(te)}
+   if te=tx.Commit(ctx);te!=nil{log.Fatal(te)}
+   log.Println("Legacy pending administrator credentials upgraded to the installation password")
+  } else if e!=nil && !errors.Is(e,pgx.ErrNoRows) {log.Fatal(e)}
+ }
+ mux:=http.NewServeMux();mux.HandleFunc("/api/",s.api)
+ dist:="dist"
+ mux.HandleFunc("/",func(w http.ResponseWriter,r *http.Request){
+  if r.URL.Path=="/" {w.Header().Set("Cache-Control","no-store");http.ServeFile(w,r,filepath.Join(dist,"index.html"));return}
+  p:=filepath.Clean(strings.TrimPrefix(r.URL.Path,"/"))
+  full:=filepath.Join(dist,p);if !strings.HasPrefix(full,dist+string(os.PathSeparator)){http.NotFound(w,r);return}
+  if st,e:=os.Stat(full);e==nil&&!st.IsDir(){http.ServeFile(w,r,full);return}
+  w.Header().Set("Cache-Control","no-store");http.ServeFile(w,r,filepath.Join(dist,"index.html"))
+ })
+ handler:=http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  w.Header().Set("X-Content-Type-Options","nosniff")
+  w.Header().Set("X-Frame-Options","DENY")
+  w.Header().Set("Referrer-Policy","strict-origin-when-cross-origin")
+  mux.ServeHTTP(w,r)
+ })
+ srv:=&http.Server{Addr:":"+fallback(os.Getenv("PORT"),"3000"),Handler:handler,ReadHeaderTimeout:5*time.Second,ReadTimeout:15*time.Second,WriteTimeout:30*time.Second,IdleTimeout:60*time.Second}
+ log.Println("NovaNexus Go API starting");log.Fatal(srv.ListenAndServe())
+}
+func fallback(v,otherwise string) string {if v==""{return otherwise};return v}
+),owner_id BIGINT NOT NULL REFERENCES users(id),kind TEXT NOT NULL DEFAULT 'normal' CHECK(kind IN ('normal','call')),closed BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
+  "CREATE TABLE IF NOT EXISTS direct_calls (id BIGSERIAL PRIMARY KEY,caller_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),room VARCHAR(8) NOT NULL UNIQUE REFERENCES meeting_rooms(room),status TEXT NOT NULL DEFAULT 'ringing' CHECK(status IN ('ringing','accepted','declined','missed','canceled')),audio_only BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),expires_at TIMESTAMPTZ NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS direct_calls_user_status_idx ON direct_calls(recipient_id,status,created_at DESC)",
+  "CREATE TABLE IF NOT EXISTS meeting_breakouts (id BIGSERIAL PRIMARY KEY,parent VARCHAR(8) NOT NULL REFERENCES meeting_rooms(room) ON DELETE CASCADE,name VARCHAR(80) NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS breakout_members (breakout_id BIGINT NOT NULL REFERENCES meeting_breakouts(id) ON DELETE CASCADE,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(breakout_id,user_id))",
   "CREATE TABLE IF NOT EXISTS calendar_events (id BIGSERIAL PRIMARY KEY,owner_id BIGINT NOT NULL REFERENCES users(id),title TEXT NOT NULL,event_date DATE NOT NULL,event_time TIME NOT NULL,duration_minutes INT NOT NULL DEFAULT 60)",
   "CREATE INDEX IF NOT EXISTS calendar_events_owner_date_idx ON calendar_events(owner_id,event_date,event_time)",
  }
