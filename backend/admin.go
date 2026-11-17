@@ -90,3 +90,16 @@ func (s *Server) adminLogsAPI(w http.ResponseWriter,r *http.Request){
  if rows.Err()!=nil{fail(w,500,"Logs unavailable");return}
  respond(w,200,map[string]any{"events":events})
 }
+
+func (s *Server) workspaceSettingsAPI(w http.ResponseWriter,r *http.Request){
+ u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
+ if u.MustChange{fail(w,403,"Password change required");return}
+ if r.Method!="GET"{fail(w,405,"Method not allowed");return}
+ settings:=map[string]string{"workspace_name":"NovaNexus Workspace","default_meeting_limit":"1000"}
+ rows,e:=s.db.Query(r.Context(),"SELECT name,value FROM app_settings WHERE name IN ('workspace_name','default_meeting_limit')")
+ if e!=nil{fail(w,500,"Settings unavailable");return}
+ defer rows.Close()
+ for rows.Next(){var name,value string;if rows.Scan(&name,&value)==nil{settings[name]=value}}
+ if rows.Err()!=nil{fail(w,500,"Settings unavailable");return}
+ respond(w,200,map[string]any{"settings":settings})
+}
