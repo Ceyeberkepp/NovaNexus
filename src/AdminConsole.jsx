@@ -22,7 +22,7 @@ export default function AdminConsole({users,setUsers}){
  async function refresh(){
   setNotice('');
   try{
-   const [directory,config,audit]=await Promise.all([fetchUsers(),adminRequest('settings'),adminRequest('logs')]);
+   const [directory,config,audit]=await Promise.all([adminRequest('directory'),adminRequest('settings'),adminRequest('logs')]);
    setUsers(directory.users);setSettings({...settings,...config.settings});setLogs(audit.events);
   }catch(e){setNotice(e.message);}
  }
@@ -98,6 +98,6 @@ function UserRow({user,busy,update}){
   <td className="p-3"><input aria-label={'Name '+user.email} className={input} value={name} onChange={e=>setName(e.target.value)}/><div className="text-xs text-slate-500 mt-1">{user.email}</div></td>
   <td className="p-3"><select aria-label={'Role '+user.email} className={input} value={role} onChange={e=>setRole(e.target.value)}><option>Regular</option><option>Admin</option></select></td>
   <td className="p-3">{user.active===false?'Disabled':'Enabled'}</td>
-  <td className="p-3 flex gap-2 flex-wrap"><button disabled={busy} className="text-indigo-700 font-semibold" onClick={()=>update(user,{name,role})}>Save</button><button disabled={busy} className="text-rose-700 font-semibold" onClick={()=>{if(window.confirm('Disable '+user.email+'?'))update(user,{active:false})}}>Disable</button></td>
+  <td className="p-3 flex gap-2 flex-wrap"><button disabled={busy} className="text-indigo-700 font-semibold" onClick={()=>update(user,{name,role})}>Save</button><button disabled={busy} className={user.active===false?'text-green-700 font-semibold':'text-rose-700 font-semibold'} onClick={()=>{if(window.confirm((user.active===false?'Enable ':'Disable ')+user.email+'?'))update(user,{active:user.active===false})}}>{user.active===false?'Enable':'Disable'}</button></td>
  </tr>;
 }
