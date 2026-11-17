@@ -1,11 +1,15 @@
 import React, {useEffect,useState} from 'react';
-import {LiveKitRoom, VideoConference} from '@livekit/components-react';
+import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-react';
+import VideoSettings from './VideoSettings';
+import {readChatPreferences} from './ChatPreferences';
 import '@livekit/components-styles';
 
 // The built-in conference controls provide microphone, camera, screen sharing,
 // active-speaker layouts, in-room chat and a real leave button.
 export default function MeetingRoom({roomId,user,onEnd}) {
   const [maxParticipants,setMaxParticipants] = useState(1000);
+  const [prefs,setPrefs] = useState(()=>readChatPreferences(user?.id||0));
+  const [showSettings,setShowSettings] = useState(false);
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
   useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}}).catch(()=>{});return ()=>{active=false;};},[]);
   const [connection,setConnection] = useState(null);
@@ -41,17 +45,18 @@ export default function MeetingRoom({roomId,user,onEnd}) {
   }
   const leave=()=>{setEnded(true);onEnd();};
   if(connection&&!ended)return <div className="h-screen w-screen bg-zinc-950 text-white relative" data-lk-theme="default">
-    <div className="absolute top-3 left-3 z-50 rounded-xl bg-zinc-900/90 border border-white/10 text-white p-2 flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold">Meeting: {roomId}</span><button className="rounded-lg bg-indigo-600 px-3 py-2" onClick={copyInvite}>Copy invite link</button>{copyFeedback&&<span role="status">{copyFeedback}</span>}</div>
+    <div className="absolute top-3 left-3 z-50 rounded-xl bg-zinc-900/90 border border-white/10 text-white p-2 flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold">Meeting: {roomId}</span><button className="rounded-lg bg-indigo-600 px-3 py-2" onClick={copyInvite}>Copy invite link</button><button className="rounded-lg border border-zinc-600 px-3 py-2" onClick={()=>setShowSettings(true)}>Meeting Settings</button>{copyFeedback&&<span role="status">{copyFeedback}</span>}</div>
     <LiveKitRoom
       serverUrl={connection.serverUrl}
       token={connection.token}
       connect={true}
-      audio={true}
-      video={true}
+      audio={prefs.callMicEnabled===false?false:{echoCancellation:prefs.callEchoCancellation!==false,noiseSuppression:prefs.callNoiseSuppression!==false,...(prefs.callAudioDevice?{deviceId:prefs.callAudioDevice}:{})}}
+      video={prefs.callCamEnabled===false?false:{resolution:({ '360p':{width:640,height:360}, '720p':{width:1280,height:720}, '1080p':{width:1920,height:1080}}[prefs.callQuality]||{width:1280,height:720}),...(prefs.callVideoDevice?{deviceId:prefs.callVideoDevice}:{})}}
       onDisconnected={leave}
       onError={(e)=>setError(e?.message||'Connection failed')}
       style={{height:'100%'}}>
       <VideoConference />
+      {showSettings&&<ConnectedSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
     </LiveKitRoom>
     {error&&<div role="alert" className="fixed bottom-6 left-6 z-50 bg-red-800 text-white p-3 rounded-lg">{error}</div>}
   </div>;
@@ -59,7 +64,7 @@ export default function MeetingRoom({roomId,user,onEnd}) {
     <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl p-8 space-y-5">
       <h1 className="text-2xl font-bold">NovaNexus Video Meeting</h1>
       <div className="text-slate-300">Room: <strong>{roomId}</strong></div>
-      <div className="text-slate-300">Signed in as {user?.name||'Member'}</div>
+      <div className="text-slate-300">Signed in as {user?.name||'Member'}</div><button className="rounded-lg border border-slate-500 px-4 py-2 text-sm" onClick={()=>setShowSettings(true)}>Video &amp; Audio Settings</button>
       <label className="grid gap-2 text-sm">Share meeting link<input aria-label="Meeting invitation link" readOnly className="w-full rounded-lg text-slate-900 p-3" value={shareUrl}/></label><button type="button" onClick={copyInvite} className="rounded-lg border border-slate-500 px-4 py-2 text-sm">Copy meeting link</button>{copyFeedback&&<p role="status" className="text-sm text-slate-300">{copyFeedback}</p>}
       <label className="grid gap-2 font-medium" htmlFor="meeting-limit">
         Maximum participants (1–{workspaceLimit})
@@ -72,10 +77,16 @@ export default function MeetingRoom({roomId,user,onEnd}) {
         depends on server resources, bandwidth and browser conditions.
       </p>
       {error&&<div role="alert" className="rounded-lg bg-red-900 p-3">{error}</div>}
+      {showSettings&&<VideoSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
       <div className="flex gap-3">
         <button onClick={join} disabled={loading} className="flex-1 rounded-lg bg-indigo-600 p-3 font-semibold disabled:opacity-60">{loading?'Connecting...':'Join Meeting'}</button>
         <button onClick={onEnd} className="rounded-lg border border-slate-600 p-3">Back</button>
       </div>
     </div>
   </div>;
+}
+
+function ConnectedSettings(props){
+ const room=useRoomContext();
+ return <VideoSettings {...props} room={room}/>;
 }
