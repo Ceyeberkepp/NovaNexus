@@ -45,7 +45,7 @@ jobs:
           NOVANEXUS_DOMAIN=127.0.0.1 docker compose up -d https
           for n in $(seq 1 30); do
             if docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > /tmp/novanexus-local-ca.crt 2>/dev/null && test -s /tmp/novanexus-local-ca.crt; then
-              if curl -fsS --cacert /tmp/novanexus-local-ca.crt https://127.0.0.1/api/health | grep -q '"ok"'; then
+              if curl -fsS --noproxy "*" --resolve "127.0.0.1:443:127.0.0.1" --cacert /tmp/novanexus-local-ca.crt https://127.0.0.1/api/health | grep -q '"status":"ok"'; then
                 exit 0
               fi
             fi
