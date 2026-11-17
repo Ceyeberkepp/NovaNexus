@@ -26,17 +26,17 @@ async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T>
   }
   return body as T;
 }
-export function signIn(email: string, password: string, setupCode: string): Promise<AuthResponse> {
+export function signIn(email: string, password: string): Promise<AuthResponse> {
   return apiRequest('/api/auth/login', {
-    method: 'POST', body: JSON.stringify({email, password, setupCode})
+    method: 'POST', body: JSON.stringify({email, password})
   });
 }
 export function getSession(): Promise<AuthResponse> {
   return apiRequest('/api/auth/me');
 }
-export function rotateInitialPassword(currentPassword: string,newPassword: string,setupCode: string): Promise<{ok:boolean;reauthenticate:boolean}> {
+export function rotateInitialPassword(currentPassword: string,newPassword: string): Promise<{ok:boolean;reauthenticate:boolean}> {
   return apiRequest('/api/auth/change-password', {
-    method: 'POST', body: JSON.stringify({currentPassword,newPassword,setupCode})
+    method: 'POST', body: JSON.stringify({currentPassword,newPassword})
   });
 }
 export function fetchUsers(): Promise<UsersResponse> {
