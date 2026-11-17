@@ -75,10 +75,29 @@ if (( ${#needed[@]} )); then
 fi
 command -v systemctl >/dev/null || fail "Systemd is required to supervise Docker."
 if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
-  log "Installing Docker Engine and Docker Compose v2"
+  log "Configuring the official Docker APT repository for $ID ${VERSION_CODENAME:-unknown}"
+  [[ -n "${VERSION_CODENAME:-}" ]] || fail "OS release codename is required for Docker packages."
   apt-get -o Acquire::Retries=2 update -qq
-  if ! apt-get -y -qq install --no-install-recommends docker.io docker-compose-v2; then
-    apt-get -y -qq install --no-install-recommends docker.io docker-compose-plugin || fail "Docker Compose v2 could not be installed from OS package sources."
+  apt-get -y -qq install --no-install-recommends ca-certificates curl
+  install -m 0755 -d /etc/apt/keyrings
+  curl --fail --silent --show-error --location "https://download.docker.com/linux/$ID/gpg" -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  arch=$(dpkg --print-architecture)
+  cat > /etc/apt/sources.list.d/docker.sources <<DOCKER_REPOSITORY
+Types: deb
+URIs: https://download.docker.com/linux/$ID
+Suites: $VERSION_CODENAME
+Components: stable
+Architectures: $arch
+Signed-By: /etc/apt/keyrings/docker.asc
+DOCKER_REPOSITORY
+  apt-get -o Acquire::Retries=2 update -qq || fail "Docker repository update failed. Check DNS and APT configuration."
+  # Do not silently remove existing container runtimes on a shared system.
+  if dpkg-query -W -f='${Status}' docker.io 2>/dev/null | grep -qx "install ok installed"; then
+    fail "Existing distro Docker Engine detected without Compose. Resolve package conflicts separately; installer will not replace a running container engine."
+  fi
+  if ! apt-get -y -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+    fail "Official Docker packages could not be installed. Check package conflicts or Docker APT availability."
   fi
 fi
 systemctl enable --now docker
