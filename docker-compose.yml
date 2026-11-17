@@ -32,6 +32,7 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?Generate LiveKit secret in installer}
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
+      NOVANEXUS_PUBLIC_DOMAIN: ${NOVANEXUS_PUBLIC_DOMAIN:-}
     expose: ["3000"]
     read_only: true
     tmpfs:
@@ -71,6 +72,7 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./additional-sites.caddy:/etc/caddy/additional-sites.caddy:ro
       - caddydata:/data
       - caddyconfig:/config
     security_opt: ["no-new-privileges:true"]
