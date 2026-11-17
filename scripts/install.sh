@@ -4,8 +4,7 @@ umask 077
 export DEBIAN_FRONTEND=noninteractive
 ROOT_DIR=/opt/novanexus
 REPO_URL=https://github.com/Ceyeberkepp/NovaNexus.git
-REF=$NOVANEXUS_REF
-REF=$([ -n "$REF" ] && echo "$REF" || echo main)
+REF=${NOVANEXUS_REF:-main}
 fail(){ echo "[NovaNexus] ERROR: $*" >&2; exit 1; }
 log(){ echo "[NovaNexus] $*"; }
 
@@ -16,9 +15,9 @@ source /etc/os-release
 [[ "$ID" == ubuntu || "$ID" == debian ]] || fail "Ubuntu/Debian required."
 [[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || fail "Architecture must be x86_64 or ARM64."
 [[ ! -e "$ROOT_DIR" ]] || fail "$ROOT_DIR already exists. Refusing to overwrite existing deployment."
-[[ "$NOVANEXUS_DOMAIN" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]] || fail "Set NOVANEXUS_DOMAIN to a fully-qualified DNS name."
+[[ "${NOVANEXUS_DOMAIN:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]] || fail "Set NOVANEXUS_DOMAIN to a fully-qualified DNS name."
 [[ "$NOVANEXUS_DOMAIN" == *.* ]] || fail "Public DNS name required for trusted HTTPS."
-[[ "$NOVANEXUS_TLS_EMAIL" == *@*.* ]] || fail "Set NOVANEXUS_TLS_EMAIL for certificate issuance."
+[[ "${NOVANEXUS_TLS_EMAIL:-}" == *@*.* ]] || fail "Set NOVANEXUS_TLS_EMAIL for certificate issuance."
 [[ "$REF" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]] || fail "Invalid branch or tag."
 log "Installing Docker and minimal tools"
 apt-get update -qq
