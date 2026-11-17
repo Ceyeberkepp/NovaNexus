@@ -41,7 +41,7 @@ A one-command installer cannot override host networking or virtualization restri
 - Username: `admin`
 - Temporary password: a unique, randomly generated password printed during installation and saved in the root-only `/opt/novanexus/.env`.
 - No separate setup code is required or shown in the Web GUI.
-- Before the dashboard unlocks, replace the temporary password with a different password of at least 16 characters; existing sessions are revoked.
+- Before the dashboard unlocks, replace the temporary password with a different password of at least 8 characters; existing sessions are revoked.
 - The known `admin/admin` combination is not accepted.
 
 The temporary credentials are a compatibility convenience, not a replacement
