@@ -16,7 +16,7 @@ export default function AdminConsole({users,setUsers}){
  const [notice,setNotice]=useState('');
  const [loading,setLoading]=useState(false);
  const [form,setForm]=useState({name:'',email:'',password:''});
- const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000'});
+ const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',session_minutes:'480'});
  const [logs,setLogs]=useState([]);
  const [groups,setGroups]=useState([]);
  const [groupForm,setGroupForm]=useState({name:'',description:''});
@@ -43,7 +43,7 @@ export default function AdminConsole({users,setUsers}){
  }
  async function saveSettings(e){
   e.preventDefault();
-  await execute(()=>adminRequest('settings',{method:'PUT',body:JSON.stringify({workspaceName:settings.workspace_name,defaultMeetingLimit:Number(settings.default_meeting_limit)})}));
+  await execute(()=>adminRequest('settings',{method:'PUT',body:JSON.stringify({workspaceName:settings.workspace_name,defaultMeetingLimit:Number(settings.default_meeting_limit),sessionMinutes:Number(settings.session_minutes)})}));
  }
  function exportLogs(){
   const rows=[['Time','Event','Actor','Target'],...logs.map(l=>[l.created_at,l.event,l.actor,l.target])];
@@ -86,7 +86,7 @@ export default function AdminConsole({users,setUsers}){
      </div>
    </div>}
     {tab==='security'&&<div className="grid md:grid-cols-2 gap-6">
-       <div className="rounded-2xl bg-white border p-7"><h2 className="font-bold mb-4">Access policies</h2><p className="text-sm">Password minimum: <strong>8 characters</strong></p><p className="text-sm mt-3">Session lifetime: <strong>8 hours</strong></p><p className="text-sm mt-3">Administrator session revocation on role change: <strong>Enabled</strong></p><p className="text-sm text-slate-500 mt-5">MFA enforcement and configurable session timeout aren't implemented. Those controls are intentionally disabled, not falsely shown as enabled.</p></div>
+       <form onSubmit={saveSettings} className="rounded-2xl bg-white border p-7 space-y-4"><h2 className="font-bold">Access policies</h2><p className="text-sm">Password minimum: <strong>8 characters</strong></p><label className="block text-sm">Session timeout (5–480 minutes)<input className={input} type="number" min="5" max="480" required value={settings.session_minutes} onChange={e=>setSettings({...settings,session_minutes:e.target.value})}/></label><p className="text-xs text-slate-500">Applies to new sign-ins. Active sessions retain their existing expiration. Role or account-status changes revoke affected sessions.</p><p className="text-sm">Administrator session revocation on role change: <strong>Enabled</strong></p><p className="text-sm text-slate-500">MFA enforcement requires enrollment and recovery flows; it is not currently available.</p><button className={btn} disabled={loading}>Save security settings</button></form>
        <div className="rounded-2xl bg-white border p-7"><h2 className="font-bold mb-4">Security activity</h2><p className="text-sm">{logs.length} recent administrative events.</p><button className={btn+' mt-4'} onClick={()=>setTab('logs')}>View audit log</button></div>
     </div>}
     {(tab==='meetings'||tab==='branding')&&<form className="max-w-xl rounded-2xl bg-white border p-7 space-y-5" onSubmit={saveSettings}>
