@@ -18,6 +18,20 @@ func (s *Server) administrator(w http.ResponseWriter,r *http.Request)(User,bool)
 func (s *Server) audit(r *http.Request,actor int64,event,target string){
  _,_ =s.db.Exec(r.Context(),"INSERT INTO audit_events(actor_id,event,target) VALUES($1,$2,$3)",actor,event,target)
 }
+func (s *Server) adminDirectoryAPI(w http.ResponseWriter,r *http.Request){
+ _,ok:=s.administrator(w,r);if !ok{return}
+ if r.Method!="GET"{fail(w,405,"Method not allowed");return}
+ rows,e:=s.db.Query(r.Context(),"SELECT id,name,email,role,active,must_change_password FROM users ORDER BY name LIMIT 1000")
+ if e!=nil{fail(w,500,"Directory unavailable");return}
+ defer rows.Close()
+ users:=make([]map[string]any,0)
+ for rows.Next(){var id int64;var name,email,role string;var active,change bool
+   if rows.Scan(&id,&name,&email,&role,&active,&change)!=nil{fail(w,500,"Directory unavailable");return}
+   users=append(users,map[string]any{"id":id,"name":name,"email":email,"role":role,"active":active,"must_change_password":change})
+ }
+ if rows.Err()!=nil{fail(w,500,"Directory unavailable");return}
+ respond(w,200,map[string]any{"users":users})
+}
 func (s *Server) adminUsersAPI(w http.ResponseWriter,r *http.Request){
  actor,ok:=s.administrator(w,r);if !ok{return}
  id,e:=strconv.ParseInt(r.URL.Query().Get("id"),10,64)
