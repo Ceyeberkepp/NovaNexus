@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Users,Shield,Calendar,Image as ImageIcon,ScrollText,Settings,Save,RefreshCw} from 'lucide-react';
+import {Users,Shield,Calendar,Image as ImageIcon,ScrollText,Settings,Save,RefreshCw,Sparkles,Clock,UserPlus} from 'lucide-react';
 import {fetchUsers,provisionUser} from './auth-client';
 
 async function adminRequest(path,options={}){
@@ -8,15 +8,15 @@ async function adminRequest(path,options={}){
  if(!res.ok)throw Error(json.error||'Request failed');
  return json;
 }
-const input='w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500';
-const btn='rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50';
-const tabs=[['users','Users',Users],['groups','Groups',Users],['security','Security',Shield],['meetings','Meetings',Calendar],['branding','Branding',ImageIcon],['logs','Logs',ScrollText]];
+const input='w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none';
+const btn='rounded-xl bg-indigo-600 px-5 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-100';
+const tabs=[['users','Users',Users],['groups','Groups',Users],['security','Security',Shield],['meetings','Meetings',Calendar],['branding','Branding',ImageIcon],['logs','Logs',ScrollText],['ai','AI Assistant',Sparkles]];
 export default function AdminConsole({users,setUsers}){
  const [tab,setTab]=useState('users');
  const [notice,setNotice]=useState('');
  const [loading,setLoading]=useState(false);
  const [form,setForm]=useState({name:'',email:'',password:''});
- const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',session_minutes:'480'});
+ const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',session_minutes:'480',waiting_room_enabled:'false',waiting_room_message:'Please wait for your host to admit you.',ai_enabled:'true'});
  const [logs,setLogs]=useState([]);
  const [groups,setGroups]=useState([]);
  const [groupForm,setGroupForm]=useState({name:'',description:''});
@@ -42,7 +42,7 @@ export default function AdminConsole({users,setUsers}){
  }
  async function saveSettings(e){
   e.preventDefault();
-  await execute(()=>adminRequest('settings',{method:'PUT',body:JSON.stringify({workspaceName:settings.workspace_name,defaultMeetingLimit:Number(settings.default_meeting_limit),sessionMinutes:Number(settings.session_minutes)})}));
+  await execute(()=>adminRequest('settings',{method:'PUT',body:JSON.stringify({workspaceName:settings.workspace_name,defaultMeetingLimit:Number(settings.default_meeting_limit),sessionMinutes:Number(settings.session_minutes),waitingRoomEnabled:settings.waiting_room_enabled==='true',waitingRoomMessage:settings.waiting_room_message,aiEnabled:settings.ai_enabled==='true'})}));
  }
  async function uploadBranding(e,key){
   const file=e.target.files?.[0];if(!file)return;
@@ -62,30 +62,30 @@ export default function AdminConsole({users,setUsers}){
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   const a=document.createElement('a');a.href=url;a.download='novanexus-audit.csv';a.click();URL.revokeObjectURL(url);
  }
- return <section className="h-full overflow-auto bg-slate-50 px-5 py-8 md:px-10">
-   <div className="mx-auto max-w-6xl">
-    <div className="flex flex-wrap justify-between gap-3 items-center mb-7">
-     <div><h1 className="text-2xl font-black text-slate-900">ADMIN CONSOLE</h1><p className="text-xs uppercase tracking-widest text-slate-500">Workspace configuration and security</p></div>
+ return <section className="h-full overflow-auto bg-[#fafbff] px-5 py-8 md:px-12">
+   <div className="mx-auto max-w-7xl">
+    <div className="flex flex-wrap justify-between gap-3 items-center mb-10">
+     <div><h1 className="text-3xl font-black uppercase tracking-tight text-slate-900">Admin Console</h1><p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Global Configuration &amp; Security</p></div>
      <button className="rounded-xl border bg-white px-4 py-2 flex items-center gap-2 text-sm" onClick={refresh}><RefreshCw size={16}/> Refresh</button>
     </div>
-    <nav className="flex gap-1 overflow-x-auto border-b mb-6" aria-label="Administration sections">{tabs.map(([key,label,Icon])=><button key={key} onClick={()=>setTab(key)} className={'flex shrink-0 items-center gap-2 px-4 py-3 text-xs font-bold uppercase '+(tab===key?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-500')}><Icon size={14}/>{label}</button>)}</nav>
+    <nav className="flex gap-6 overflow-x-auto border-b border-slate-100 mb-9 no-scrollbar" aria-label="Administration sections">{tabs.map(([key,label,Icon])=><button key={key} onClick={()=>setTab(key)} className={'flex shrink-0 items-center gap-2 px-1 pb-4 pt-2 text-[10px] font-black uppercase tracking-widest '+(tab===key?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-500')}><Icon size={14}/>{label}</button>)}</nav>
     {notice&&<div role="status" className="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">{notice}</div>}
-    {tab==='users'&&<div className="grid gap-6 lg:grid-cols-[310px_1fr]">
-      <form onSubmit={createAccount} className="bg-white rounded-2xl p-6 border shadow-sm space-y-4 h-fit">
-       <h2 className="font-bold">Provision Identity</h2>
+    {tab==='users'&&<div className="grid gap-8 lg:grid-cols-[300px_1fr]">
+      <form onSubmit={createAccount} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-5 h-fit">
+       <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-3"><UserPlus size={17} className="text-indigo-600"/>Provision Identity</h2>
        <label className="block text-sm">Full name<input className={input} minLength={2} maxLength={120} required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>
        <label className="block text-sm">Email<input className={input} type="email" required value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label>
        <label className="block text-sm">Temporary password (8+ characters)<input className={input} type="password" minLength={8} required value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label>
        <button className={btn} disabled={loading}>Create member</button>
       </form>
-      <div className="bg-white rounded-2xl border shadow-sm overflow-x-auto">
+      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-x-auto">
        <table className="w-full text-left text-sm"><thead><tr className="border-b bg-slate-50"><th className="p-4">Name / email</th><th className="p-4">Role</th><th className="p-4">Account</th><th className="p-4">Actions</th></tr></thead><tbody>
         {users.map(u=><UserRow key={u.id} user={u} busy={loading} update={updateAccount}/>)}
        </tbody></table>
       </div>
     </div>}
-    {tab==='groups'&&<div className="grid lg:grid-cols-[300px_1fr] gap-6">
-     <form className="rounded-2xl bg-white border p-6 space-y-4 h-fit" onSubmit={async e=>{e.preventDefault();await execute(()=>adminRequest('groups',{method:'POST',body:JSON.stringify(groupForm)}));setGroupForm({name:'',description:''});}}>
+    {tab==='groups'&&<div className="grid lg:grid-cols-[280px_1fr] gap-8">
+     <form className="rounded-[2.5rem] bg-white border border-slate-100 p-8 space-y-4 h-fit" onSubmit={async e=>{e.preventDefault();await execute(()=>adminRequest('groups',{method:'POST',body:JSON.stringify(groupForm)}));setGroupForm({name:'',description:''});}}>
        <h2 className="font-bold">Create Group</h2>
        <label className="block text-sm">Group name<input className={input} value={groupForm.name} minLength={2} maxLength={100} required onChange={e=>setGroupForm({...groupForm,name:e.target.value})}/></label>
        <label className="block text-sm">Description<textarea className={input} maxLength={500} value={groupForm.description} onChange={e=>setGroupForm({...groupForm,description:e.target.value})}/></label>
@@ -96,14 +96,14 @@ export default function AdminConsole({users,setUsers}){
       {groups.length===0&&<div className="rounded-2xl bg-white p-7 border text-sm text-slate-500">No groups have been created yet.</div>}
      </div>
    </div>}
-    {tab==='security'&&<div className="grid md:grid-cols-2 gap-6">
-       <form onSubmit={saveSettings} className="rounded-2xl bg-white border p-7 space-y-4"><h2 className="font-bold">Access policies</h2><p className="text-sm">Password minimum: <strong>8 characters</strong></p><label className="block text-sm">Session timeout (5–480 minutes)<input className={input} type="number" min="5" max="480" required value={settings.session_minutes} onChange={e=>setSettings({...settings,session_minutes:e.target.value})}/></label><p className="text-xs text-slate-500">Applies to new sign-ins. Active sessions retain their existing expiration. Role or account-status changes revoke affected sessions.</p><p className="text-sm">Administrator session revocation on role change: <strong>Enabled</strong></p><p className="text-sm text-slate-500">MFA enforcement requires enrollment and recovery flows; it is not currently available.</p><button className={btn} disabled={loading}>Save security settings</button></form>
-       <div className="rounded-2xl bg-white border p-7"><h2 className="font-bold mb-4">Security activity</h2><p className="text-sm">{logs.length} recent administrative events.</p><button className={btn+' mt-4'} onClick={()=>setTab('logs')}>View audit log</button></div>
+    {tab==='security'&&<div className="grid md:grid-cols-2 gap-8">
+       <form onSubmit={saveSettings} className="rounded-[2.5rem] bg-white border border-slate-100 shadow-sm p-9 space-y-5"><h2 className="font-bold">Access policies</h2><p className="text-sm">Password minimum: <strong>8 characters</strong></p><label className="block text-sm">Session timeout (5–480 minutes)<input className={input} type="number" min="5" max="480" required value={settings.session_minutes} onChange={e=>setSettings({...settings,session_minutes:e.target.value})}/></label><p className="text-xs text-slate-500">Applies to new sign-ins. Active sessions retain their existing expiration. Role or account-status changes revoke affected sessions.</p><p className="text-sm">Administrator session revocation on role change: <strong>Enabled</strong></p><p className="text-sm text-slate-500">MFA enforcement requires enrollment and recovery flows; it is not currently available.</p><button className={btn} disabled={loading}>Save security settings</button></form>
+       <div className="rounded-[2.5rem] bg-white border border-slate-100 shadow-sm p-9"><h2 className="font-bold mb-4">Security activity</h2><p className="text-sm">{logs.length} recent administrative events.</p><button className={btn+' mt-4'} onClick={()=>setTab('logs')}>View audit log</button></div>
     </div>}
-    {(tab==='meetings'||tab==='branding')&&<form className="max-w-xl rounded-2xl bg-white border p-7 space-y-5" onSubmit={saveSettings}>
+    {(tab==='meetings'||tab==='branding')&&<form className="max-w-5xl rounded-[2.5rem] bg-white border border-slate-100 shadow-sm p-8 space-y-6" onSubmit={saveSettings}>
       <h2 className="font-bold">{tab==='meetings'?'Meeting defaults':'Workspace branding'}</h2>
       {tab==='meetings'?<><label className="block text-sm">Default maximum participants (1–1000)<input className={input} type="number" min="1" max="1000" required value={settings.default_meeting_limit} onChange={e=>setSettings({...settings,default_meeting_limit:e.target.value})}/></label><p className="text-sm text-slate-500">This is the server-configured room limit. It does not certify 1000 simultaneous video connections. Guest waiting-room enforcement, recording and host moderation require additional service integration.</p></>:
-        <><label className="block text-sm">Workspace name<input className={input} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label><div className="grid gap-4">{[['site_logo','Site Logo'],['login_logo','Login Screen Logo'],['favicon','Favicon']].map(([key,label])=><div key={key} className="rounded-xl border p-4 space-y-3"><div className="font-semibold text-sm">{label}</div>{settings[key]&&<img src={settings[key]} alt={label} className="max-h-20 max-w-40 object-contain"/>}<label className="block text-xs font-semibold text-indigo-700 cursor-pointer">Upload image (PNG, JPEG, WebP, max 128 KB)<input className="block mt-2 text-xs" accept="image/png,image/jpeg,image/webp" type="file" onChange={e=>uploadBranding(e,key)}/></label>{settings[key]&&<button type="button" className="text-xs text-rose-700 font-semibold" onClick={()=>clearBranding(key)}>Remove image</button>}</div>)}</div><p className="text-xs text-slate-500">The uploaded assets are validated and saved on the server. Login and browser branding update after refresh.</p></>}
+        <><label className="block text-sm">Workspace name<input className={input} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label><div className="grid gap-4">{[['site_logo','Site Logo'],['login_logo','Login Screen Logo'],['favicon','Favicon'],['waiting_logo','Waiting Room Logo']].map(([key,label])=><div key={key} className="rounded-xl border p-4 space-y-3"><div className="font-semibold text-sm">{label}</div>{settings[key]&&<img src={settings[key]} alt={label} className="max-h-20 max-w-40 object-contain"/>}<label className="block text-xs font-semibold text-indigo-700 cursor-pointer">Upload image (PNG, JPEG, WebP, max 128 KB)<input className="block mt-2 text-xs" accept="image/png,image/jpeg,image/webp" type="file" onChange={e=>uploadBranding(e,key)}/></label>{settings[key]&&<button type="button" className="text-xs text-rose-700 font-semibold" onClick={()=>clearBranding(key)}>Remove image</button>}</div>)}</div><p className="text-xs text-slate-500">The uploaded assets are validated and saved on the server. Login and browser branding update after refresh.</p></>}
       <button className={btn+' flex items-center gap-2'} disabled={loading}><Save size={16}/> Save changes</button>
     </form>}
     {tab==='logs'&&<div className="rounded-2xl bg-white border overflow-hidden">
