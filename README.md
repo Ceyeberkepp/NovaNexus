@@ -10,22 +10,19 @@ NovaNexus is being built as a secure, self-hosted environment for teams and admi
 
 > **Development preview — not production-certified.** This installs the implemented Go API, PostgreSQL, React frontend and HTTPS reverse proxy, but does not make unfinished video, messaging, calendar or MCP features functional. Review the script before running it with administrator privileges.
 
-**One command** on a fresh Ubuntu/Debian server **after curl is installed**:
+**One command** on a fresh Debian/Ubuntu server where you are already `root` (works even when `curl` is not installed):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /tmp/novanexus-install.sh && bash -n /tmp/novanexus-install.sh && sudo bash /tmp/novanexus-install.sh
+apt-get update && apt-get install -y ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh && bash /root/novanexus-install.sh
 ```
 
-**Already logged in as root?** Omit `sudo`:
+This single command installs the bootstrap downloader if needed, then launches the installer. The installer automatically installs the remaining packages, Docker/Compose, PostgreSQL, Go backend, React frontend, and Caddy HTTPS. **You do not manually configure Docker or the database.** On systems already containing `curl`, you may use only the download-and-run portion. Review the downloaded installer before running untrusted code as root.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh && bash -n /root/novanexus-install.sh && bash /root/novanexus-install.sh
-```
+**No domain required:** the installer detects the host IPv4 address and configures `https://SERVER_IP` using a private local TLS certificate authority. On other devices the root CA must be trusted to avoid certificate warnings. A public DNS name can be specified with `NOVANEXUS_DOMAIN` if preferred, with a publicly issued TLS certificate subject to DNS and port requirements. It does not automatically create DNS or modify upstream router/firewall settings.
 
-Review the downloaded script before running it. On a minimal Debian system without curl, first run `apt update && apt install -y ca-certificates curl`. If Debian returns package `404 Not Found`, refresh stale APT metadata with `apt clean && rm -rf /var/lib/apt/lists/* && apt update`, then retry the package installation.
+**Note:** A container or VM must permit Docker and port 443; host-level restrictions cannot be bypassed by an installer. An existing installation is not overwritten.
 
-The installer prompts for your public domain and TLS certificate email. It then automatically installs required system packages and Docker Compose, downloads the application, configures PostgreSQL and a Go API, builds the frontend, configures Caddy HTTPS and verifies `https://YOUR_DOMAIN/api/health`. **You do not need to install Docker, PostgreSQL, Go or Node manually.** A public DNS record and inbound ports 80/443 are prerequisites for trusted HTTPS; the installer cannot create your DNS entry or firewall rules automatically.
-
+For details see [INSTALL.md](INSTALL.md). **This is a development preview, not a production-certified installer.**
 **First login:** username `admin`, temporary password `admin`, plus the random setup code displayed by the installer. Changing the password is mandatory. The setup code is also saved in the root-only `/opt/novanexus/.env`.
 
 For installation details, supported environments and known blockers see [INSTALL.md](INSTALL.md). **Never use this development-preview installer on a production host until deployment and release validation are completed.**
