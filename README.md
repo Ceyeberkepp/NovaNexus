@@ -6,6 +6,22 @@ NovaNexus is being built as a secure, self-hosted environment for teams and admi
 
 > **Development status:** NovaNexus is **not yet production-ready**. The imported React workspace contains prototype features. Video meetings, persistent messaging, scheduling, MCP services, and various administration functions must be implemented, integrated, and tested before a production launch.
 
+## One-click installation (Ubuntu / Debian)
+
+> **Development preview — not production-certified.** This installs the implemented Go API, PostgreSQL, React frontend and HTTPS reverse proxy, but does not make unfinished video, messaging, calendar or MCP features functional. Review the script before running it with administrator privileges.
+
+**One command** on a fresh Ubuntu/Debian server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh | sudo bash
+```
+
+The installer prompts for your public domain and TLS certificate email. It then automatically installs required system packages and Docker Compose, downloads the application, configures PostgreSQL and a Go API, builds the frontend, configures Caddy HTTPS and verifies `https://YOUR_DOMAIN/api/health`. **You do not need to install Docker, PostgreSQL, Go or Node manually.** A public DNS record and inbound ports 80/443 are prerequisites for trusted HTTPS; the installer cannot create your DNS entry or firewall rules automatically.
+
+**First login:** username `admin`, temporary password `admin`, plus the random setup code displayed by the installer. Changing the password is mandatory. The setup code is also saved in the root-only `/opt/novanexus/.env`.
+
+For installation details, supported environments and known blockers see [INSTALL.md](INSTALL.md). **Never use this development-preview installer on a production host until deployment and release validation are completed.**
+
 ## Project overview
 
 | Area | Current state |
