@@ -15,6 +15,7 @@ export default function AdminConsole({users,setUsers}){
  const [tab,setTab]=useState('users');
  const [notice,setNotice]=useState('');
  const [loading,setLoading]=useState(false);
+ const [resetResult,setResetResult]=useState(null);
  const [form,setForm]=useState({name:'',email:'',password:''});
  const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',session_minutes:'480',waiting_room_enabled:'false',waiting_room_message:'Please wait for your host to admit you.',ai_enabled:'true'});
  const [logs,setLogs]=useState([]);
@@ -32,6 +33,12 @@ export default function AdminConsole({users,setUsers}){
   try{await fn();await refresh();setNotice('Changes saved successfully.');window.dispatchEvent(new Event('novanexus:branding-changed'));}
   catch(e){setNotice(e.message);}
   finally{setLoading(false);}
+ }
+ async function resetPassword(user){
+  if(!window.confirm('Generate a new temporary password and revoke all sessions for '+user.email+'?'))return;
+  setLoading(true);setNotice('');setResetResult(null);
+  try{const response=await adminRequest('reset-password',{method:'POST',body:JSON.stringify({userID:user.id})});setResetResult({user:user.email,password:response.temporaryPassword});await refresh();}
+  catch(e){setNotice(e.message);}finally{setLoading(false);}
  }
  async function createAccount(e){
   e.preventDefault();
@@ -70,6 +77,7 @@ export default function AdminConsole({users,setUsers}){
     </div>
     <nav className="flex gap-6 overflow-x-auto border-b border-slate-100 mb-9 no-scrollbar" aria-label="Administration sections">{tabs.map(([key,label,Icon])=><button key={key} onClick={()=>setTab(key)} className={'flex shrink-0 items-center gap-2 px-1 pb-4 pt-2 text-[10px] font-black uppercase tracking-widest '+(tab===key?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-500')}><Icon size={14}/>{label}</button>)}</nav>
     {notice&&<div role="status" className="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">{notice}</div>}
+    {resetResult&&<div role="status" className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm"><strong>Temporary password for {resetResult.user}</strong><p className="mt-2 text-xs text-amber-800">Share securely. This secret is shown only once; previous sessions were revoked and the member must change it on next sign-in.</p><div className="mt-3 flex gap-3 items-center flex-wrap"><code className="rounded-lg border bg-white p-3 break-all">{resetResult.password}</code><button type="button" className="text-indigo-700 font-bold" onClick={()=>navigator.clipboard.writeText(resetResult.password)}>Copy password</button><button type="button" className="text-slate-500" onClick={()=>setResetResult(null)}>Dismiss</button></div></div>}
     {tab==='users'&&<div className="grid gap-8 lg:grid-cols-[300px_1fr]">
       <form onSubmit={createAccount} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-5 h-fit">
        <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-3"><UserPlus size={17} className="text-indigo-600"/>Provision Identity</h2>
@@ -80,7 +88,7 @@ export default function AdminConsole({users,setUsers}){
       </form>
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-x-auto">
        <table className="w-full text-left text-sm"><thead><tr className="border-b bg-slate-50"><th className="p-4">Name / email</th><th className="p-4">Role</th><th className="p-4">Account</th><th className="p-4">Actions</th></tr></thead><tbody>
-        {users.map(u=><UserRow key={u.id} user={u} busy={loading} update={updateAccount}/>)}
+        {users.map(u=><UserRow key={u.id} user={u} busy={loading} update={updateAccount} onReset={resetPassword}/>)}
        </tbody></table>
       </div>
     </div>}
@@ -133,7 +141,7 @@ export default function AdminConsole({users,setUsers}){
    </div>
  </section>;
 }
-function UserRow({user,busy,update}){
+function UserRow({user,busy,update,onReset}){
  const [name,setName]=useState(user.name);
  const [role,setRole]=useState(user.role);
  const [editing,setEditing]=useState(false);
@@ -146,7 +154,7 @@ function UserRow({user,busy,update}){
   <td className="p-5"><span className={'text-[10px] font-bold '+(user.active===false?'text-rose-600':'text-green-600')}>{user.active===false?'Disabled':'Enabled'}</span></td>
   <td className="p-5"><div className="flex flex-wrap gap-3">
    {editing?<><button disabled={busy||name.trim().length<2} className="text-xs font-black text-indigo-600" onClick={save}>Save</button><button className="text-xs text-slate-500" onClick={()=>{setEditing(false);setName(user.name);setRole(user.role)}}>Cancel</button></>:<button className="text-xs font-black text-indigo-600" disabled={busy} onClick={()=>setEditing(true)} aria-label={'Edit '+user.name}><Edit2 size={16}/></button>}
-   <button disabled={busy} className={'text-xs font-bold '+(user.active===false?'text-green-700':'text-rose-600')} onClick={()=>{if(window.confirm((user.active===false?'Enable ':'Disable ')+user.email+'?'))update(user,{active:user.active===false})}}>{user.active===false?'Enable':'Disable'}</button>
+   <button disabled={busy||user.active===false} title="Reset password" className="text-indigo-700 text-xs font-bold" onClick={()=>onReset(user)}>Reset password</button><button disabled={busy} className={'text-xs font-bold '+(user.active===false?'text-green-700':'text-rose-600')} onClick={()=>{if(window.confirm((user.active===false?'Enable ':'Disable ')+user.email+'?'))update(user,{active:user.active===false})}}>{user.active===false?'Enable':'Disable'}</button>
   </div></td>
  </tr>;
 }
