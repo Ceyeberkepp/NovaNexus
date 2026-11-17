@@ -42,7 +42,15 @@ source /etc/os-release
 [[ "$ID" == ubuntu || "$ID" == debian ]] || fail "Only Ubuntu and Debian are supported."
 [[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || fail "Requires x86_64 or ARM64."
 command -v apt-get >/dev/null || fail "apt-get is required."
-[[ ! -e "$ROOT_DIR" ]] || fail "$ROOT_DIR exists: refusing to overwrite a previous installation."
+if [[ -e "$ROOT_DIR" && ! -f "$ROOT_DIR/.env" ]]; then
+  fail "$ROOT_DIR exists without the expected configuration; it will not be overwritten."
+fi
+RESUME_INSTALL=0
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  [[ -f "$ROOT_DIR/docker-compose.yml" && -f "$ROOT_DIR/Caddyfile" ]] || fail "Incomplete prior installation. Inspect $ROOT_DIR before retrying."
+  RESUME_INSTALL=1
+  log "Existing installation detected: resuming without resetting credentials."
+fi
 [[ "$REF" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]] || fail "Invalid source ref."
 
 NOVANEXUS_DOMAIN=${NOVANEXUS_DOMAIN:-}
@@ -117,20 +125,66 @@ if command -v ss >/dev/null; then
 fi
 
 log "Fetching the selected NovaNexus source"
-git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$ROOT_DIR"
+if [[ "$RESUME_INSTALL" == 0 ]]; then
+  git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$ROOT_DIR"
+fi
 cd "$ROOT_DIR"
 [[ -f Dockerfile && -f docker-compose.yml && -f Caddyfile && -f go.mod ]] || fail "The selected source ref does not contain all required services."
-DB_PASSWORD=$(openssl rand -hex 24)
-SETUP_CODE=$(openssl rand -hex 24)
-cat >.env <<EOF
+if [[ "$RESUME_INSTALL" == 0 ]]; then
+  DB_PASSWORD=$(openssl rand -hex 24)
+  SETUP_CODE=$(openssl rand -hex 24)
+  cat >.env <<EOF
 DB_PASSWORD=$DB_PASSWORD
 BOOTSTRAP_SETUP_CODE=$SETUP_CODE
 NOVANEXUS_DOMAIN=$NOVANEXUS_DOMAIN
 TLS_EMAIL=$NOVANEXUS_TLS_EMAIL
 EOF
+else
+  stored_address=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' .env | head -n 1)
+  SETUP_CODE=$(sed -n 's/^BOOTSTRAP_SETUP_CODE=//p' .env | head -n 1)
+  [[ -n "$stored_address" && -n "$SETUP_CODE" ]] || fail "Existing .env is incomplete; refusing credential reset."
+  NOVANEXUS_DOMAIN=$stored_address
+  if valid_ipv4 "$NOVANEXUS_DOMAIN"; then TLS_MODE=internal; else TLS_MODE=public; fi
+  log "Reusing original address: https://$NOVANEXUS_DOMAIN"
+fi
 chmod 600 .env
 if [[ "$TLS_MODE" == internal ]]; then
-  sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
+  if ! grep -Eq '^[[:space:]]+tls internal[[:space:]]*
+fi
+log "Building Go API and React frontend and starting PostgreSQL + HTTPS"
+docker compose config --quiet
+docker compose build --pull app
+docker compose up -d --wait --wait-timeout 240
+log "Checking HTTPS certificate and application health"
+CURL_CA=()
+if [[ "$TLS_MODE" == internal ]]; then
+  CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
+  docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
+  chmod 644 "$CA_FILE"
+  CURL_CA=(--cacert "$CA_FILE")
+fi
+verified=false
+for attempt in $(seq 1 15); do
+  if curl --fail --silent --connect-timeout 4 --max-time 8 "${CURL_CA[@]}" "https://$NOVANEXUS_DOMAIN/api/health" 2>/dev/null | grep -q '"ok"'; then
+    verified=true; break
+  fi
+  sleep 2
+done
+if [[ "$verified" != true ]]; then
+  docker compose logs --tail=60 https app db >&2 || true
+  fail "HTTPS health verification failed; NOT marking installation complete."
+fi
+printf "\nNovaNexus HTTPS check passed: https://%s\n" "$NOVANEXUS_DOMAIN"
+if [[ "$TLS_MODE" == internal ]]; then
+  printf "Local TLS root certificate: %s\n" "$CA_FILE"
+  printf "Trust this CA on browser devices to avoid HTTPS warnings.\n"
+fi
+printf "Initial username: admin\nTemporary password: admin\nOne-time installation setup code: %s\n" "$SETUP_CODE"
+printf "You must change the admin password before the dashboard unlocks.\n"
+printf "Root-only deployment settings: %s/.env\n" "$ROOT_DIR"
+ Caddyfile; then
+    sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
+  fi
 fi
 log "Building Go API and React frontend and starting PostgreSQL + HTTPS"
 docker compose config --quiet
