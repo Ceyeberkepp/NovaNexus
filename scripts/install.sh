@@ -61,15 +61,32 @@ fi
 
 NOVANEXUS_DOMAIN=${NOVANEXUS_DOMAIN:-}
 NOVANEXUS_TLS_EMAIL=${NOVANEXUS_TLS_EMAIL:-}
+# Optional public access: a domain that points to this host via DNS and router/NAT.
+# An HTTP-only tunnel is not sufficient to carry WebRTC media.
+NOVANEXUS_PUBLIC_DOMAIN=${NOVANEXUS_PUBLIC_DOMAIN:-}
+LAN_IP=$(detect_ipv4 || true)
 if [[ "$RESUME_INSTALL" == 1 ]]; then
   NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
   [[ -n "$NOVANEXUS_DOMAIN" ]] || fail "Existing deployment address missing."
   log "Using existing deployment address: $NOVANEXUS_DOMAIN"
+  if [[ -z "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
+    NOVANEXUS_PUBLIC_DOMAIN=$(sed -n 's/^NOVANEXUS_PUBLIC_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
 elif [[ -z "$NOVANEXUS_DOMAIN" ]]; then
   NOVANEXUS_DOMAIN=$(detect_ipv4 || true)
   [[ -z "$NOVANEXUS_DOMAIN" ]] || log "Using detected server IP: $NOVANEXUS_DOMAIN"
 fi
 if [[ -z "$NOVANEXUS_DOMAIN" ]]; then NOVANEXUS_DOMAIN=$(ask "Server IPv4 address or public DNS name"); fi
+if [[ "$RESUME_INSTALL" == 0 && -z "$NOVANEXUS_PUBLIC_DOMAIN" && -r /dev/tty ]]; then
+  NOVANEXUS_PUBLIC_DOMAIN=$(ask "Optional public HTTPS hostname for outside access (Enter to keep LAN only)")
+fi
+# A public domain already used as the primary address must not create a duplicate site.
+if [[ "$NOVANEXUS_PUBLIC_DOMAIN" == "$NOVANEXUS_DOMAIN" ]]; then NOVANEXUS_PUBLIC_DOMAIN=""; fi
+if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
+  NOVANEXUS_PUBLIC_DOMAIN=${NOVANEXUS_PUBLIC_DOMAIN#https://}
+  NOVANEXUS_PUBLIC_DOMAIN=${NOVANEXUS_PUBLIC_DOMAIN%/}
+  valid_domain "$NOVANEXUS_PUBLIC_DOMAIN" || fail "Provide a valid public DNS hostname, not a private IP or URL path."
+fi
 if valid_ipv4 "$NOVANEXUS_DOMAIN"; then
   TLS_MODE=internal
   NOVANEXUS_TLS_EMAIL=local@novanexus.invalid
@@ -127,6 +144,10 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required."
 if [[ "$TLS_MODE" == public ]]; then
   getent ahosts "$NOVANEXUS_DOMAIN" >/dev/null || fail "DNS does not resolve $NOVANEXUS_DOMAIN. Set the DNS record first."
 fi
+if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
+  getent ahosts "$NOVANEXUS_PUBLIC_DOMAIN" >/dev/null ||
+    log "WARNING: Public hostname $NOVANEXUS_PUBLIC_DOMAIN does not resolve yet; internet HTTPS will not work until DNS is configured."
+fi
 if [[ "$RESUME_INSTALL" == 0 ]] && command -v ss >/dev/null; then
   for port in 80 443; do
     if ss -H -ltn | awk '{print $4}' | grep -Eq "[:.]${port}$"; then
@@ -162,6 +183,7 @@ LIVEKIT_API_KEY=novanexus
 LIVEKIT_API_SECRET=$LIVEKIT_SECRET
 NOVANEXUS_DOMAIN=$NOVANEXUS_DOMAIN
 TLS_EMAIL=$NOVANEXUS_TLS_EMAIL
+NOVANEXUS_PUBLIC_DOMAIN=$NOVANEXUS_PUBLIC_DOMAIN
 EOF
 else
   stored_address=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' .env | head -n 1)
@@ -184,26 +206,59 @@ else
   sed -i '/^BOOTSTRAP_SETUP_CODE=/d' .env
   log "Reusing previous HTTPS address: $NOVANEXUS_DOMAIN"
 fi
+# Synchronize the optional hostname on upgrades without touching credentials.
+# This supports changing a LAN deployment to dual LAN/internet access in-place.
+sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d' .env
+printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" >>.env
 chmod 600 .env
 LIVEKIT_KEY=$(sed -n "s/^LIVEKIT_API_KEY=//p" .env | head -n1)
 LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
 [[ "$LIVEKIT_KEY" =~ ^[a-zA-Z0-9_-]{3,64}$ && ${#LIVEKIT_SECRET} -ge 32 ]] || fail "Invalid video server credentials."
 [[ "$NOVANEXUS_DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] || fail "Invalid video host address."
-# A single UDP mux port keeps the media setup simple for a one-server LAN deployment.
-# This is a capacity setting, NOT a claim that one server can carry 1000 simultaneous videos.
+# WebRTC media uses dedicated UDP/TCP ports, NOT the HTTPS reverse proxy.
+# When a publicly reachable hostname is configured, LiveKit asks STUN for its
+# public candidate. This still requires router/NAT forwarding for 7881 TCP
+# and 7882 UDP (or a properly configured TURN service).
+PUBLIC_MEDIA=0
+if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" || "$TLS_MODE" == public ]]; then PUBLIC_MEDIA=1; fi
+if [[ "$PUBLIC_MEDIA" == 1 ]]; then
+  MEDIA_RTC_CONFIG='  use_external_ip: true'
+else
+  MEDIA_RTC_CONFIG="  use_external_ip: false
+  node_ip: $NOVANEXUS_DOMAIN"
+fi
 cat >livekit.yaml <<LIVEKIT_CONFIGURATION
 port: 7880
 rtc:
   tcp_port: 7881
   udp_port: 7882
-  use_external_ip: false
-  node_ip: "$NOVANEXUS_DOMAIN"
+$MEDIA_RTC_CONFIG
 room:
   max_participants: 1000
 keys:
   "$LIVEKIT_KEY": "$LIVEKIT_SECRET"
 LIVEKIT_CONFIGURATION
 chmod 600 livekit.yaml
+# The shared Caddyfile serves the primary address. Generate a second HTTPS
+# site when LAN IP + public hostname must coexist. Nothing is exposed on HTTP
+# beyond Caddy's redirect and certificate challenge handling.
+cat >additional-sites.caddy <<'SITE_HEADER'
+# Additional HTTPS site rendered by the NovaNexus installer.
+SITE_HEADER
+if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
+  cat >>additional-sites.caddy <<PUBLIC_SITE
+$NOVANEXUS_PUBLIC_DOMAIN {
+    import novanexus_routes
+}
+PUBLIC_SITE
+elif [[ "$TLS_MODE" == public && -n "$LAN_IP" && "$LAN_IP" != "$NOVANEXUS_DOMAIN" ]]; then
+  cat >>additional-sites.caddy <<LAN_SITE
+$LAN_IP {
+    tls internal
+    import novanexus_routes
+}
+LAN_SITE
+fi
 if [[ "$TLS_MODE" == internal ]]; then
   # Upgrade existing Caddyfile in place; a resume does not re-clone repository files.
   if ! grep -Eq '^[[:space:]]+default_sni[[:space:]]+' Caddyfile; then
@@ -271,6 +326,17 @@ printf "\n==========================================\n"
 printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
 printf "==========================================\n"
 log "The local HTTPS endpoint passed its certificate and API checks. LAN reachability depends on your network/firewall."
+if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
+  printf "Public Web GUI (after DNS + router setup): https://%s/\n" "$NOVANEXUS_PUBLIC_DOMAIN"
+elif [[ "$TLS_MODE" == public ]]; then
+  printf "Public Web GUI (after DNS + router setup): https://%s/\n" "$NOVANEXUS_DOMAIN"
+fi
+if [[ "$PUBLIC_MEDIA" == 1 ]]; then
+  log "Internet media requires reachable TCP 7881 and UDP 7882; HTTPS on TCP 443 alone does NOT carry WebRTC media."
+  log "Forward TCP 80/443 and TCP 7881 + UDP 7882 from the public gateway to this host, unless an existing secure ingress/relay handles those services."
+  log "Internet access is NOT confirmed by this local health check. Verify from a device outside the LAN."
+fi
+
 if [[ "$TLS_MODE" == internal ]]; then
   printf "Local TLS root certificate: %s\n" "$CA_FILE"
   printf "Trust this CA on browser devices to avoid HTTPS warnings.\n"
