@@ -1,14 +1,20 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {useRoomContext} from '@livekit/components-react';
 import {RoomEvent} from 'livekit-client';
-import {Disc,Square,Users,Shield,Cast,Monitor,ChevronDown} from 'lucide-react';
+import {Disc,Square,Users,Cast,Monitor,MoreVertical,Settings,Link2,DoorOpen,Plus,Trash2,ArrowLeft} from 'lucide-react';
 
-export default function MeetingExtras({roomId,maxParticipants}){
+export default function MeetingExtras({roomId,maxParticipants,user,isHost,onOpenSettings,onSwitchBreakout,activeBreakoutId=0}){
  const room=useRoomContext();
  const [participants,setParticipants]=useState(1);
  const [expanded,setExpanded]=useState(false);
  const [recording,setRecording]=useState(false);
  const [notice,setNotice]=useState('');
+ const [breakoutOpen,setBreakoutOpen]=useState(false);
+ const [breakouts,setBreakouts]=useState([]);
+ const [team,setTeam]=useState([]);
+ const [roomName,setRoomName]=useState('');
+ const [selectedUser,setSelectedUser]=useState('');
+ const [currentAssignment,setCurrentAssignment]=useState(0);
  const recordingRef=useRef(null);
  const streamRef=useRef(null);
  useEffect(()=>{
@@ -45,22 +51,68 @@ export default function MeetingExtras({roomId,maxParticipants}){
   }catch(e){setNotice(e.message||'Recording could not start');}
  }
  function stopRecording(){if(recordingRef.current?.state==='recording')recordingRef.current.stop();}
- return <div className="fixed right-3 top-3 z-[55] max-w-[270px] text-white text-xs">
-  <div className="flex gap-2 justify-end">
-   <span className="flex items-center gap-2 rounded-xl bg-zinc-900/95 border border-zinc-700 px-3 py-2"><Users size={14}/> {participants}/{maxParticipants}</span>
-   <button onClick={()=>setExpanded(x=>!x)} className="flex items-center gap-2 rounded-xl bg-zinc-900/95 border border-zinc-700 px-3 py-2"><ChevronDown size={14}/> More</button>
-  </div>
-  {expanded&&<div className="mt-2 rounded-xl border border-zinc-700 bg-zinc-900/95 p-3 space-y-3 shadow-xl">
-   <h3 className="font-bold text-indigo-200">Meeting tools</h3>
-   <div className="flex gap-2 items-center"><Disc size={15} className="text-red-400"/><span className="font-semibold">Recording</span></div>
-   <p className="text-[11px] leading-relaxed text-zinc-400">Record a browser-selected window or tab to a local WebM file. Screen/tab audio availability varies; this does not capture server audio or create cloud recordings.</p>
-   {recording?<button className="flex gap-2 items-center w-full rounded-lg bg-rose-600 px-3 py-2 font-semibold" onClick={stopRecording}><Square size={13}/> Stop and download</button>:<button className="flex gap-2 items-center w-full rounded-lg bg-indigo-600 px-3 py-2 font-semibold" onClick={startRecording}><Disc size={13}/> Record selected screen</button>}
-   <div className="border-t border-zinc-700 pt-3 space-y-3 text-[11px]">
-    <div className="flex items-start gap-2"><Users size={15} className="text-zinc-500"/><span><strong>Breakout rooms</strong><br/><span className="text-zinc-400">Host assignment not yet available.</span></span></div>
-    <div className="flex items-start gap-2"><Cast size={15} className="text-zinc-500"/><span><strong>Broadcast feed</strong><br/><span className="text-zinc-400">RTMP/egress not configured.</span></span></div>
-    <div className="flex items-start gap-2"><Monitor size={15} className="text-zinc-500"/><span><strong>Remote control</strong><br/><span className="text-zinc-400">Permission and remote-control protocol not configured.</span></span></div>
+ async function breakoutRequest(payload){
+  const method=payload?'POST':'GET';
+  const res=await fetch(method==='GET'?'/api/meetings/breakouts?parent='+encodeURIComponent(roomId):'/api/meetings/breakouts',{
+    credentials:'same-origin',method,headers:payload?{'Content-Type':'application/json'}:undefined,
+    body:payload?JSON.stringify({...payload,parent:roomId}):undefined
+  });
+  const data=await res.json();
+  if(!res.ok)throw Error(data.error||'Breakout update failed');
+  return data;
+ }
+ async function refreshBreakouts(){
+  try{
+   const data=await breakoutRequest();
+   setBreakouts(data.breakouts||[]);
+   if(!data.isHost){
+    const assigned=(data.breakouts||[]).find(b=>b.assigned)?.id||0;
+    setCurrentAssignment(assigned);
+    if(assigned!==activeBreakoutId)onSwitchBreakout?.(assigned);
+   }
+  }catch(e){setNotice(e.message)}
+ }
+ useEffect(()=>{
+  let live=true;
+  if(isHost){fetch('/api/users',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(live)setTeam(d.users||[])}).catch(()=>{});}
+  return()=>{live=false};
+ },[isHost]);
+ useEffect(()=>{refreshBreakouts();const timer=setInterval(refreshBreakouts,5000);return()=>clearInterval(timer)},[roomId,isHost,activeBreakoutId]);
+ async function mutate(payload){
+  try{
+   await breakoutRequest(payload);setRoomName('');setNotice('Saved breakout room changes.');await refreshBreakouts();
+  }catch(e){setNotice(e.message)}
+ }
+ async function copyLink(){
+  try{await navigator.clipboard.writeText(window.location.origin+'/'+roomId);setNotice('Meeting link copied.');}
+  catch{setNotice('Copy this meeting link: '+window.location.origin+'/'+roomId)}
+ }
+
+ return <div className="fixed bottom-4 right-4 z-[60] max-w-[min(370px,94vw)] text-white text-xs">
+  {expanded&&<div role="menu" className="mb-3 max-h-[75vh] overflow-y-auto rounded-2xl border border-zinc-600 bg-zinc-900/95 p-5 space-y-4 shadow-2xl backdrop-blur">
+   <h3 className="text-sm font-black text-white">Meeting options</h3>
+   <p className="text-[11px] text-zinc-400">Meeting {roomId} · {participants} of {maxParticipants} participants</p>
+   <button onClick={()=>{onOpenSettings?.();setExpanded(false)}} className="flex w-full items-center gap-3 rounded-xl bg-zinc-800 p-3 text-left font-semibold hover:bg-zinc-700"><Settings size={17}/> Video & audio settings</button>
+   <button onClick={copyLink} className="flex w-full items-center gap-3 rounded-xl bg-zinc-800 p-3 text-left font-semibold hover:bg-zinc-700"><Link2 size={17}/> Copy meeting link</button>
+   <div className="border-t border-zinc-700 pt-4">
+    <div className="mb-2 flex gap-2 items-center"><Disc size={16} className="text-red-400"/><span className="font-semibold">Record meeting</span></div>
+    <p className="mb-3 text-[11px] text-zinc-400">Record a selected window or tab to a local WebM file. All participants should be informed. Audio capture depends on browser permissions. This is not server-side recording.</p>
+    {recording?<button className="w-full rounded-xl bg-rose-600 p-3 font-semibold" onClick={stopRecording}>Stop recording and download</button>:<button className="w-full rounded-xl bg-indigo-600 p-3 font-semibold" onClick={startRecording}>Start screen recording</button>}
    </div>
-   {notice&&<p role="status" className="text-[11px] text-amber-200">{notice}</p>}
+   <button onClick={()=>setBreakoutOpen(x=>!x)} className="flex w-full items-center justify-between rounded-xl bg-zinc-800 p-3 text-left font-semibold"><span className="flex items-center gap-3"><DoorOpen size={17}/> Breakout rooms</span><span>{breakouts.length}</span></button>
+   {breakoutOpen&&<div className="space-y-3 rounded-xl border border-zinc-700 p-3">
+    {isHost&&<div className="space-y-2"><label className="block text-xs font-semibold">New breakout room<input className="mt-2 w-full rounded-lg bg-zinc-800 p-2" placeholder="Room name" value={roomName} maxLength={80} onChange={e=>setRoomName(e.target.value)}/></label><button disabled={!roomName.trim()} className="w-full rounded-lg bg-indigo-600 p-2 disabled:opacity-50" onClick={()=>mutate({action:'create',name:roomName})}>Create room</button></div>}
+    {breakouts.map(room=><div key={room.id} className="rounded-xl border border-zinc-700 bg-zinc-800 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3"><span className="font-bold">{room.name}</span>{isHost&&<button className="text-rose-300" title="Delete breakout" onClick={()=>{if(window.confirm('Delete '+room.name+'?'))mutate({action:'delete',breakoutID:room.id})}}><Trash2 size={15}/></button>}</div>
+      {isHost&&<><div className="space-y-1">{(room.members||[]).map(id=>{const member=team.find(u=>u.id===id);return <div className="flex justify-between gap-2 text-[11px]" key={id}><span>{member?.name||'Member '+id}</span><button className="text-rose-300" onClick={()=>mutate({action:'unassign',breakoutID:room.id,userID:id})}>Remove</button></div>})}</div><select value={selectedUser} onChange={e=>setSelectedUser(e.target.value)} className="w-full rounded-lg bg-zinc-700 p-2"><option value="">Assign member</option>{team.filter(t=>t.active!==false&&t.id!==user?.id).map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select><button className="w-full rounded-lg bg-indigo-600 p-2 disabled:opacity-40" disabled={!selectedUser} onClick={()=>mutate({action:'assign',breakoutID:room.id,userID:Number(selectedUser)})}>Assign to breakout</button></>}
+      {(isHost||room.assigned)&&<button className="w-full rounded-lg border border-zinc-600 p-2 font-semibold" onClick={()=>onSwitchBreakout?.(room.id)}>Enter room</button>}
+    </div>)}
+    {activeBreakoutId>0&&<button className="flex w-full gap-2 justify-center rounded-lg bg-zinc-700 p-2" onClick={()=>onSwitchBreakout?.(0)}><ArrowLeft size={14}/> Return to main meeting</button>}
+    {!isHost&&breakouts.length===0&&<p className="text-zinc-400">The host has not created breakout rooms.</p>}
+   </div>}
+   <p className="border-t border-zinc-700 pt-3 text-zinc-400 text-[11px]">Broadcasting and remote control require separate services.</p>
+   {notice&&<p role="status" className="text-amber-200 break-words">{notice}</p>}
   </div>}
+  <button aria-label="More meeting options" aria-expanded={expanded} onClick={()=>setExpanded(x=>!x)} className="ml-auto flex items-center justify-center gap-2 rounded-2xl border border-zinc-600 bg-zinc-900 p-4 text-white shadow-xl hover:bg-zinc-800"><MoreVertical size={21}/><span className="font-bold">More</span></button>
  </div>;
 }
