@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MeetingRoom from './MeetingRoom';
+import CallNotifications from './CallNotifications';
 import AdminConsole from './AdminConsole';
 import WorkspaceAssistant from './WorkspaceAssistant';
 import ChatPreferences,{readChatPreferences,chatThemes} from './ChatPreferences';
@@ -138,17 +139,16 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
     e.preventDefault();
     setAuthError('');
     if (activeTab === 'join') {
-      if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(meetingId)){setAuthError('Enter a valid meeting ID (1–80 letters, digits, - or _).');return;}
+      if(!/^[0-9]{8}$/.test(meetingId)){setAuthError('Enter an 8-digit meeting number.');return;}
       const target = new URL(window.location.href);
-      target.searchParams.set('room',meetingId);
-      window.location.assign(target.toString());
+      window.location.assign('/'+meetingId);
       return;
     }
     setLoading(true);
     try {
       const result = await signIn(email, password);
       setUser(result.user);
-      setView(result.user.must_change_password ? 'change-password' : (prefilledRoom ? 'meeting' : 'dashboard'));
+      setView(result.user.must_change_password ? 'change-password' : (prefilledRoom&&/^[0-9]{8}$/.test(prefilledRoom)?'meeting':'dashboard'));
     } catch (error) {
       setAuthError(error.message || 'Sign-in failed');
     } finally {
@@ -1412,8 +1412,8 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {/* ... chat controls ... */}
-                                    <button onClick={() => startMeeting(`Call-${selectedChat.id}`)} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Phone size={18}/></button>
-                                    <button onClick={() => startMeeting(`Video-${selectedChat.id}`)} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Video size={18}/></button>
+                                    <button disabled={!!selectedChat.members} title="Call this member" onClick={() => window.dispatchEvent(new CustomEvent("novanexus:call",{detail:{recipientId:selectedChat.id,name:selectedChat.name,audioOnly:true}}))} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Phone size={18}/></button>
+                                    <button disabled={!!selectedChat.members} title="Video call this member" onClick={() => window.dispatchEvent(new CustomEvent("novanexus:call",{detail:{recipientId:selectedChat.id,name:selectedChat.name,audioOnly:false}}))} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Video size={18}/></button>
                                     
                                     {/* People Menu Button */}
                                     <div className="relative">
@@ -1450,7 +1450,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                                             <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                                                 <div className="py-1">
                                                     <button onClick={() => { startMeeting(`Meeting-${selectedChat.id}`); setShowChatMenu(false); }} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3"><Calendar size={14}/> Schedule meeting</button>
-                                                    <button className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3"><MonitorUp size={14}/> Screen sharing</button>
+                                                    <button onClick={() => { startMeeting("unavailable");setShowChatMenu(false); }} className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3"><MonitorUp size={14}/> Screen sharing</button>
                                                     {/* ... other items ... */}
                                                 </div>
                                             </div>
@@ -1944,7 +1944,8 @@ function App() {
   const [view, setView] = useState('auth'); 
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [meetingRoom, setMeetingRoom] = useState('');
+  const [meetingRoom, setMeetingRoom] = useState(()=>/^\/[0-9]{8}\/?$/.test(window.location.pathname)?window.location.pathname.replaceAll('/',''):'');
+  const [meetingOptions,setMeetingOptions]=useState({autoJoin:false,audioOnly:false});
   const [users, setUsers] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
@@ -1956,8 +1957,9 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const r = params.get('room'); 
-    if (r) setMeetingRoom(r);
+    const pathRoom=/^\/([0-9]{8})\/?$/.exec(window.location.pathname)?.[1];
+    const r = pathRoom||params.get('room');
+    if (r&&/^[0-9]{8}$/.test(r)) setMeetingRoom(r);
   }, []);
 
   useEffect(() => {
@@ -1965,7 +1967,7 @@ function App() {
     (async () => {
       try {
         const data = await getSession();
-        if (active) { setUser(data.user); const requestedRoom = new URLSearchParams(window.location.search).get('room');setView(data.user.must_change_password ? 'change-password' : (requestedRoom ? 'meeting' : 'dashboard')); }
+        if (active) { setUser(data.user); const requestedRoom=/^\/([0-9]{8})\/?$/.exec(window.location.pathname)?.[1]||new URLSearchParams(window.location.search).get('room');setView(data.user.must_change_password ? 'change-password' : (requestedRoom&&/^[0-9]{8}$/.test(requestedRoom)?'meeting':'dashboard')); }
       } catch (error) {
         console.error('Authentication service unavailable', error);
       } finally {
@@ -1982,13 +1984,22 @@ function App() {
       .catch(error => console.error(error));
   }, [user]);
 
-  const startMeeting = (room) => {
-      const id = room && room !== 'unavailable' ? String(room) : `Nexus-${Date.now()}`;
-      if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id)) {
-        window.alert('Use a meeting ID containing 1–80 letters, digits, underscores or hyphens.');
-        return;
+  const startMeeting = async (room, options={}) => {
+      let id=String(room||'').trim();
+      if(!/^[0-9]{8}$/.test(id)){
+        if(id && !['unavailable','new'].includes(id) && !/^(Meeting-|Call-|Video-)/.test(id)){
+          window.alert('Meeting ID must be exactly 8 digits.');return;
+        }
+        try {
+          const response=await fetch('/api/meetings/create',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'normal'})});
+          const data=await response.json();
+          if(!response.ok)throw new Error(data.error||'Unable to create meeting');
+          id=data.room;
+        }catch(error){window.alert(error.message||'Unable to create meeting');return;}
       }
+      setMeetingOptions({autoJoin:!!options.autoJoin,audioOnly:!!options.audioOnly});
       setMeetingRoom(id);
+      window.history.pushState({},'', '/'+id);
       setView('meeting');
   };
 
@@ -2003,7 +2014,8 @@ function App() {
   
   // Clean handle end call to manage guest vs user redirection
   const handleMeetingEnd = () => {
-      const target=new URL(window.location.href);target.searchParams.delete('room');window.history.replaceState({},'',target.toString());
+      window.history.replaceState({},'','/');
+      setMeetingOptions({autoJoin:false,audioOnly:false});
       if (user?.isGuest) {
           setUser(null);
           setView('auth');
@@ -2015,11 +2027,12 @@ function App() {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center" role="status">Checking your session...</div>;
   if (view === 'change-password') return <ChangeInitialPassword onComplete={() => {setUser(null);setView('auth');}} />;
   if (view === 'auth') return <AuthScreen setUser={setUser} setView={setView} prefilledRoom={meetingRoom} />;
-  if (view === 'meeting') return <MeetingRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} />; 
+  if (view === 'meeting') return <MeetingRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} autoJoin={meetingOptions.autoJoin} audioOnly={meetingOptions.audioOnly} />; 
 
   return (
     // ... existing layout code ...
         <div className="h-screen w-full bg-[#f9fafb] flex font-sans text-slate-800 overflow-hidden selection:bg-indigo-100 selection:text-indigo-800 flex-col md:flex-row">
+            <CallNotifications user={user} onJoin={startMeeting} />
             {/* Profile Modal */}
           {false && showProfile && (
               <ProfileSettingsModal 
@@ -2085,7 +2098,7 @@ function App() {
                                 <div className="relative z-10"><div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-all duration-500 shadow-inner backdrop-blur-md mb-4"><Plus size={24} strokeWidth={3}/></div><h3 className="font-black text-2xl tracking-tighter">Start Video Meeting</h3><p className="text-indigo-100 mt-2 text-[10px] uppercase font-bold tracking-widest opacity-80">Audio • Video • Screen sharing • Up to 1000 participants</p></div>
                             </div>
                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col justify-center h-64 relative overflow-hidden">
-                                <div className="relative z-10"><h3 className="font-black mb-6 text-slate-800 text-[10px] uppercase tracking-[0.3em] flex items-center gap-2"><LinkIcon size={14}/> Join Session</h3><div className="flex flex-col sm:flex-row gap-3"><input placeholder="Enter Room Key..." value={meetingRoom} onChange={e=>setMeetingRoom(e.target.value)} className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-[1.5rem] text-xs outline-none shadow-inner focus:ring-4 focus:ring-indigo-50 transition-all font-bold" /><button onClick={() => startMeeting(meetingRoom)} disabled={!meetingRoom} className="bg-slate-900 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black hover:scale-105 transition-all disabled:opacity-50">Connect</button></div></div>
+                                <div className="relative z-10"><h3 className="font-black mb-6 text-slate-800 text-[10px] uppercase tracking-[0.3em] flex items-center gap-2"><LinkIcon size={14}/> Join Session</h3><div className="flex flex-col sm:flex-row gap-3"><input placeholder="8-digit meeting number" value={meetingRoom} onChange={e=>setMeetingRoom(e.target.value)} className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-[1.5rem] text-xs outline-none shadow-inner focus:ring-4 focus:ring-indigo-50 transition-all font-bold" /><button onClick={() => startMeeting(meetingRoom)} disabled={!/^[0-9]{8}$/.test(meetingRoom)} className="bg-slate-900 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black hover:scale-105 transition-all disabled:opacity-50">Connect</button></div></div>
                             </div>
                         </div>
 
