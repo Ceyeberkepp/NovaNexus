@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MeetingRoom from './MeetingRoom';
 import CallNotifications from './CallNotifications';
+import CallsPanel from './CallsPanel';
 import AdminConsole from './AdminConsole';
 import WorkspaceAssistant from './WorkspaceAssistant';
 import ChatPreferences,{readChatPreferences,chatThemes,chatBackgrounds} from './ChatPreferences';
@@ -2055,7 +2056,9 @@ function App() {
               <nav className="px-3 space-y-1">
                 <NavItem icon={<LayoutGrid />} label="Overview" active={currentTab === 'dashboard'} onClick={() => setCurrentTab('dashboard')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<MessageCircle />} label="Chat" active={currentTab === 'chats'} onClick={() => setCurrentTab('chats')} collapsed={sidebarCollapsed} />
-                <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
+                <NavItem icon={<Phone />} label="Calls" active={currentTab === 'calls'} onClick={() => setCurrentTab('calls')} collapsed={sidebarCollapsed} />
+                <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'calls' && <CallsPanel user={user} users={users} />}
+                {currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Sparkles />} label="AI Assistant" active={currentTab === 'ai'} onClick={() => setCurrentTab('ai')} collapsed={sidebarCollapsed} />
                 {user?.role === 'Admin' && <NavItem icon={<Shield />} label="Admin" active={currentTab === 'admin'} onClick={() => setCurrentTab('admin')} collapsed={sidebarCollapsed} />}
               </nav>
