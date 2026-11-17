@@ -126,6 +126,7 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/admin/users":s.adminUsersAPI(w,r)
  case "/api/admin/settings":s.adminSettingsAPI(w,r)
  case "/api/admin/logs":s.adminLogsAPI(w,r)
+ case "/api/admin/groups":s.adminGroupsAPI(w,r)
  case "/api/health":if e:=s.db.Ping(r.Context());e!=nil{fail(w,503,"Database unavailable")}else{respond(w,200,map[string]any{"status":"ok"})}
  case "/api/meetings/token":s.meetingTokenAPI(w,r)
  case "/api/messages":s.messagesAPI(w,r)
@@ -146,6 +147,8 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "CREATE TABLE IF NOT EXISTS app_settings (name TEXT PRIMARY KEY,value TEXT NOT NULL)",
   "INSERT INTO app_settings(name,value) VALUES ('workspace_name','NovaNexus Workspace'),('default_meeting_limit','1000') ON CONFLICT(name) DO NOTHING",
   "CREATE TABLE IF NOT EXISTS audit_events (id BIGSERIAL PRIMARY KEY,actor_id BIGINT REFERENCES users(id) ON DELETE SET NULL,event TEXT NOT NULL,target TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
+  "CREATE TABLE IF NOT EXISTS workspace_groups (id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL UNIQUE,description TEXT NOT NULL DEFAULT '')",
+  "CREATE TABLE IF NOT EXISTS group_members (group_id BIGINT NOT NULL REFERENCES workspace_groups(id) ON DELETE CASCADE,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(group_id,user_id))",
   "CREATE TABLE IF NOT EXISTS direct_messages (id BIGSERIAL PRIMARY KEY,sender_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   "CREATE INDEX IF NOT EXISTS direct_messages_pair_idx ON direct_messages(sender_id,recipient_id,id DESC)",
   "CREATE TABLE IF NOT EXISTS calendar_events (id BIGSERIAL PRIMARY KEY,owner_id BIGINT NOT NULL REFERENCES users(id),title TEXT NOT NULL,event_date DATE NOT NULL,event_time TIME NOT NULL,duration_minutes INT NOT NULL DEFAULT 60)",
