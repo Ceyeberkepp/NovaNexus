@@ -123,6 +123,8 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  }
  switch r.URL.Path {
  case "/api/health":if e:=s.db.Ping(r.Context());e!=nil{fail(w,503,"Database unavailable")}else{respond(w,200,map[string]any{"status":"ok"})}
+ case "/api/messages":s.messagesAPI(w,r)
+ case "/api/calendar":s.calendarAPI(w,r)
  case "/api/auth/login":if r.Method=="POST"{s.login(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/auth/me":if r.Method=="GET"{s.me(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/auth/logout":if r.Method=="POST"{s.logout(w,r)}else{fail(w,405,"Method not allowed")}
@@ -136,6 +138,10 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "CREATE TABLE IF NOT EXISTS users (id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('Admin','Regular')),active BOOLEAN NOT NULL DEFAULT TRUE,must_change_password BOOLEAN NOT NULL DEFAULT FALSE)",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE",
   "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS direct_messages (id BIGSERIAL PRIMARY KEY,sender_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
+  "CREATE INDEX IF NOT EXISTS direct_messages_pair_idx ON direct_messages(sender_id,recipient_id,id DESC)",
+  "CREATE TABLE IF NOT EXISTS calendar_events (id BIGSERIAL PRIMARY KEY,owner_id BIGINT NOT NULL REFERENCES users(id),title TEXT NOT NULL,event_date DATE NOT NULL,event_time TIME NOT NULL,duration_minutes INT NOT NULL DEFAULT 60)",
+  "CREATE INDEX IF NOT EXISTS calendar_events_owner_date_idx ON calendar_events(owner_id,event_date,event_time)",
  }
  for _,query:=range statements {if _,e:=db.Exec(ctx,query);e!=nil{return e}}
  return nil
