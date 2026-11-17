@@ -1811,8 +1811,8 @@ const SecureUserManagement = ({ users, setUsers }) => {
         <input id="admin-name" required minLength={2} maxLength={120} className="border rounded-lg p-3" value={form.name} onChange={e => setForm({...form,name:e.target.value})}/>
         <label htmlFor="admin-email">Email address</label>
         <input id="admin-email" required type="email" className="border rounded-lg p-3" value={form.email} onChange={e => setForm({...form,email:e.target.value})}/>
-        <label htmlFor="admin-password">Temporary password (at least 14 characters)</label>
-        <input id="admin-password" required type="password" minLength={14} autoComplete="new-password" className="border rounded-lg p-3" value={form.password} onChange={e => setForm({...form,password:e.target.value})}/>
+        <label htmlFor="admin-password">Temporary password (at least 8 characters)</label>
+        <input id="admin-password" required type="password" minLength={8} autoComplete="new-password" className="border rounded-lg p-3" value={form.password} onChange={e => setForm({...form,password:e.target.value})}/>
         <button type="submit" disabled={busy} className="bg-indigo-600 text-white p-3 rounded-lg disabled:opacity-60">{busy?'Creating account...':'Create account'}</button>
         {feedback && <p role="status" className="text-sm">{feedback}</p>}
       </form>
@@ -1836,7 +1836,7 @@ const ChangeInitialPassword = ({ onComplete }) => {
     event.preventDefault();
     setError('');
     if (newPassword !== repeatPassword) {setError('New passwords must match');return;}
-    if (newPassword.length < 16 || newPassword === currentPassword) {setError('Use a different password with at least 16 characters');return;}
+    if (newPassword.length < 8 || newPassword === currentPassword) {setError('Use a different password with at least 8 characters');return;}
     setBusy(true);
     try {
       await rotateInitialPassword(currentPassword,newPassword);
@@ -1850,10 +1850,10 @@ const ChangeInitialPassword = ({ onComplete }) => {
       <p className="text-slate-600 text-sm">The initial admin password must be replaced before accessing NovaNexus. Your session will end after the password is changed.</p>
       <label htmlFor="current-password">Current password</label>
       <input id="current-password" className="border p-3 rounded" type="password" required value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}/>
-      <label htmlFor="new-password">New password (16+ characters)</label>
-      <input id="new-password" className="border p-3 rounded" type="password" minLength={16} required value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
+      <label htmlFor="new-password">New password (8+ characters)</label>
+      <input id="new-password" className="border p-3 rounded" type="password" minLength={8} required value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
       <label htmlFor="repeat-password">Confirm new password</label>
-      <input id="repeat-password" className="border p-3 rounded" type="password" minLength={16} required value={repeatPassword} onChange={e=>setRepeatPassword(e.target.value)}/>
+      <input id="repeat-password" className="border p-3 rounded" type="password" minLength={8} required value={repeatPassword} onChange={e=>setRepeatPassword(e.target.value)}/>
       {error && <p role="alert" className="text-red-700">{error}</p>}
       <button disabled={busy} type="submit" className="bg-indigo-600 text-white p-3 rounded"> {busy?'Changing...':'Change password and sign in again'} </button>
     </form>
