@@ -25,12 +25,12 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const shareUrl=meetingBaseURL+'/'+encodeURIComponent(roomId||'');
   async function copyInvite(){try{await navigator.clipboard.writeText(shareUrl);setCopyFeedback('Invite link copied.');}catch{setCopyFeedback('Select and copy the invite link below.');}}
 
-  async function join(breakoutID=0) {
+  async function join(breakoutID=0,useServerCapacity=false) {
     if(!/^[0-9]{8}$/.test(roomId||'')) {
       setError('Meeting ID must be exactly 8 digits.');
       return;
     }
-    if(!Number.isInteger(maxParticipants)||maxParticipants<1||maxParticipants>workspaceLimit){
+    if(!useServerCapacity&&(!Number.isInteger(maxParticipants)||maxParticipants<1||maxParticipants>workspaceLimit)){
       setError("Meeting capacity must be between 1 and the administrator's configured limit.");
       return;
     }
@@ -40,7 +40,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
         method:'POST',
         credentials:'same-origin',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({room:roomId,maxParticipants,breakoutID})
+        body:JSON.stringify({room:roomId,maxParticipants:useServerCapacity?0:maxParticipants,breakoutID})
       });
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'Unable to join meeting');
@@ -53,10 +53,10 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   async function switchBreakout(id){
     if(id===activeBreakoutId)return;
     switchingRef.current=true;
-    await join(id);
+    await join(id,true);
     window.setTimeout(()=>{switchingRef.current=false;},1700);
   }
-  useEffect(()=>{if(autoJoin&&!autostartedRef.current&&/^[0-9]{8}$/.test(roomId)){autostartedRef.current=true;join();}},[autoJoin,roomId]);
+  useEffect(()=>{if(autoJoin&&!autostartedRef.current&&/^[0-9]{8}$/.test(roomId)){autostartedRef.current=true;join(0,true);}},[autoJoin,roomId]);
 
   if(connection&&!ended)return <div className="h-screen w-screen bg-zinc-950 text-white relative" data-lk-theme="default">
     <div className="absolute top-3 left-3 z-50 rounded-xl bg-zinc-900/90 border border-white/10 text-white p-2 flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold">Meeting: {roomId}{activeBreakoutId>0?` · Breakout ${activeBreakoutId}`:""}</span>{copyFeedback&&<span role="status">{copyFeedback}</span>}</div>
