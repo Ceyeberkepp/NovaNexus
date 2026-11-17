@@ -20,10 +20,16 @@ source /etc/os-release
 [[ "${NOVANEXUS_TLS_EMAIL:-}" == *@*.* ]] || fail "Set NOVANEXUS_TLS_EMAIL for certificate issuance."
 [[ "$REF" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]] || fail "Invalid branch or tag."
 log "Installing Docker and minimal tools"
-apt-get update -qq
-apt-get install -y -qq --no-install-recommends git curl openssl ca-certificates docker.io docker-compose-v2 ||
-  fail "Docker Compose v2 not available from OS repositories. Install Docker Engine and Compose v2 and retry."
+apt-get -o Acquire::Retries=2 update -qq
+apt-get install -y -qq --no-install-recommends git curl openssl ca-certificates
+if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
+  if ! apt-get install -y -qq --no-install-recommends docker.io docker-compose-v2; then
+    apt-get install -y -qq --no-install-recommends docker.io docker-compose-plugin ||
+      fail "Docker Compose v2 not available from OS repositories. Install Docker Engine + Compose v2 and retry."
+  fi
+fi
 systemctl enable --now docker
+docker info >/dev/null || fail "Docker service is not ready."
 docker compose version >/dev/null || fail "Docker Compose v2 required."
 if command -v ss >/dev/null; then
   for port in 80 443; do
