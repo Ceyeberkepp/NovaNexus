@@ -1,0 +1,60 @@
+name: NovaNexus CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  build-and-auth-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: novanexus
+          POSTGRES_USER: novanexus
+          POSTGRES_PASSWORD: test_password_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U novanexus"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://novanexus:test_password_only@127.0.0.1:5432/novanexus
+      BOOTSTRAP_ADMIN_EMAIL: admin@example.test
+      BOOTSTRAP_ADMIN_NAME: Test Administrator
+      BOOTSTRAP_ADMIN_PASSWORD: integration-only-very-long-test-password
+      NODE_ENV: development
+      PORT: 3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Syntax and build
+        run: |
+          npm run check
+          npm run build
+      - name: Start application
+        run: |
+          node server/index.js > /tmp/novanexus-server.log 2>&1 &
+          for n in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/novanexus-server.log
+          exit 1
+      - name: Verify authentication and access controls
+        run: |
+          set -euo pipefail
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/users)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"email":"admin@example.test","password":"wrong"}' http://127.0.0.1:3000/api/auth/login)" = "401"
+          curl --fail --silent -c /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"email":"admin@example.test","password":"integration-only-very-long-test-password"}' http://127.0.0.1:3000/api/auth/login > /tmp/login.json
+          grep -q '"Admin"' /tmp/login.json
+          curl --fail --silent -b /tmp/nova-cookie http://127.0.0.1:3000/api/auth/me | grep -q 'admin@example.test'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie -H 'Origin: https://malicious.example' -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:3000/api/auth/logout)" = "403"
+          curl --fail --silent -b /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"name":"Staff Member","email":"staff@example.test","password":"long-password-for-staff"}' http://127.0.0.1:3000/api/users | grep -q 'staff@example.test'
+          curl --fail --silent -b /tmp/nova-cookie -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:3000/api/auth/logout | grep -q 'true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie http://127.0.0.1:3000/api/users)" = "401"
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high
