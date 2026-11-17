@@ -16,6 +16,8 @@ func (s *Server) aiAssistantAPI(w http.ResponseWriter,r *http.Request){
  if r.Method!="POST"{fail(w,405,"Method not allowed");return}
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
  if u.MustChange{fail(w,403,"Password change required");return}
+ var aiEnabled string
+ if e=s.db.QueryRow(r.Context(),"SELECT value FROM app_settings WHERE name='ai_enabled'").Scan(&aiEnabled);e!=nil||aiEnabled!="true"{fail(w,403,"AI assistant is disabled by the workspace administrator");return}
  var input struct{Messages []assistantTurn `json:"messages"`}
  if asJSON(r,&input)!=nil||len(input.Messages)==0||len(input.Messages)>16{fail(w,400,"Send 1–16 conversation messages");return}
  msgs:=[]assistantTurn{{Role:"system",Content:"You are the NovaNexus Workspace assistant. Give useful concise answers, help users use chat, meetings, calendar and workspace tools. Do not claim to have performed tasks, changed accounts, read private messages or accessed documents; you cannot do that through this chat. If an action needs a tool, explain the steps."}}
