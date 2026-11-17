@@ -107,16 +107,33 @@ jobs:
           curl -fsS -c /tmp/nova-second-cookie -H 'Content-Type: application/json' -d '{"email":"second@local.invalid","password":"12345678"}' "$base/api/auth/login" > /tmp/nova-second-login.json
           curl -fsS -b /tmp/nova-second-cookie "$base/api/messages?peer=1" | grep -q 'Hello from backend integration'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie "$base/api/calendar")" = "200"
-      - name: Verify meeting token access and 1000-user policy
+      - name: Verify eight-digit meeting ID, direct calls and breakout management
         run: |
           set -euo pipefail
           base=http://127.0.0.1:3000
-          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"room":"TeamDemo","maxParticipants":1000}' "$base/api/meetings/token")" = "401"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"TeamDemo","maxParticipants":1001}' "$base/api/meetings/token")" = "400"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"invalid room","maxParticipants":50}' "$base/api/meetings/token")" = "400"
-          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"TeamDemo","maxParticipants":1000}' "$base/api/meetings/token" > /tmp/meeting-token.json
-          python3 -c 'import json,base64;v=json.load(open("/tmp/meeting-token.json"));p=v["token"].split("."); assert len(p)==3;claims=json.loads(base64.urlsafe_b64decode(p[1]+"==="));assert claims["video"]["room"]=="TeamDemo";assert claims["roomConfig"]["maxParticipants"]==1000;assert v["maxParticipants"]==1000'
-          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"SmallMeeting","maxParticipants":1}' "$base/api/meetings/token" | grep -q '"maxParticipants":1'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"room":"12345678"}' "$base/api/meetings/token")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"room":"TeamDemo"}' "$base/api/meetings/token")" = "400"
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{}' "$base/api/meetings/create" > /tmp/nova-meeting.json
+          meeting=$(python3 -c 'import json,re;v=json.load(open("/tmp/nova-meeting.json"));assert re.fullmatch(r"[0-9]{8}",v["room"]);assert v["urlPath"]=="/"+v["room"];print(v["room"])')
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"room\":\"$meeting\",\"maxParticipants\":1000}" "$base/api/meetings/token" > /tmp/meeting-token.json
+          python3 -c 'import json,base64;v=json.load(open("/tmp/meeting-token.json"));p=v["token"].split(".");assert len(p)==3;claims=json.loads(base64.urlsafe_b64decode(p[1]+"==="));assert claims["video"]["room"]==json.load(open("/tmp/nova-meeting.json"))["room"];assert claims["roomConfig"]["maxParticipants"]==1000'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"room\":\"$meeting\",\"maxParticipants\":1}" "$base/api/meetings/token" | grep -q '"maxParticipants":1'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"parent\":\"$meeting\",\"action\":\"create\",\"name\":\"Engineering\"}" "$base/api/meetings/breakouts" > /tmp/nova-breakout.json
+          breakout_id=$(python3 -c 'import json;print(json.load(open("/tmp/nova-breakout.json"))["id"])')
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/meetings/breakouts?parent=$meeting" | grep -q 'Engineering'
+          second_id=$(python3 -c 'import json;print(json.load(open("/tmp/nova-second.json"))["user"]["id"])')
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"parent\":\"$meeting\",\"action\":\"assign\",\"breakoutID\":$breakout_id,\"userID\":$second_id}" "$base/api/meetings/breakouts" | grep -q true
+          curl -fsS -b /tmp/nova-second-cookie -H 'Content-Type: application/json' -d "{\"room\":\"$meeting\",\"breakoutID\":$breakout_id}" "$base/api/meetings/token" | grep -q '"breakoutId":'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"recipientID\":$second_id,\"action\":\"start\"}" "$base/api/calls" > /tmp/nova-call.json
+          call_id=$(python3 -c 'import json;print(json.load(open("/tmp/nova-call.json"))["id"])')
+          call_room=$(python3 -c 'import json;print(json.load(open("/tmp/nova-call.json"))["room"])')
+          curl -fsS -b /tmp/nova-second-cookie "$base/api/calls" | grep -q "$call_room"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie -H 'Content-Type: application/json' -d "{\"room\":\"$call_room\"}" "$base/api/meetings/token")" = "403"
+          curl -fsS -b /tmp/nova-second-cookie -H 'Content-Type: application/json' -d "{\"callID\":$call_id,\"action\":\"accept\"}" "$base/api/calls" | grep -q accepted
+          curl -fsS -b /tmp/nova-second-cookie -H 'Content-Type: application/json' -d "{\"room\":\"$call_room\"}" "$base/api/meetings/token" | grep -q '"token":'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"recipientID\":$second_id,\"action\":\"start\"}" "$base/api/calls" > /tmp/nova-call2.json
+          next_call=$(python3 -c 'import json;print(json.load(open("/tmp/nova-call2.json"))["id"])')
+          curl -fsS -b /tmp/nova-second-cookie -H 'Content-Type: application/json' -d "{\"callID\":$next_call,\"action\":\"decline\"}" "$base/api/calls" | grep -q declined
       - name: Verify editable Admin settings and groups
         run: |
           set -euo pipefail
@@ -142,12 +159,13 @@ jobs:
           set -euo pipefail
           base=http://127.0.0.1:3000
           second_id=$(python3 -c 'import json;print(json.load(open("/tmp/nova-second.json"))["user"]["id"])')
-          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"userID\":$second_id}" "$base/api/admin/reset-password" > /tmp/nova-password-reset.json
-          python3 -c 'import json;v=json.load(open("/tmp/nova-password-reset.json"));assert len(v["temporaryPassword"])>=24 and v["mustChange"]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"userID\":$second_id,\"newPassword\":\"short\",\"adminPassword\":\"integration-test-new-secure-password\"}" "$base/api/admin/reset-password")" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"userID\":$second_id,\"newPassword\":\"chosen-by-admin-123\",\"adminPassword\":\"wrong-password\"}" "$base/api/admin/reset-password")" = "401"
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"userID\":$second_id,\"newPassword\":\"chosen-by-admin-123\",\"adminPassword\":\"integration-test-new-secure-password\"}" "$base/api/admin/reset-password" > /tmp/nova-password-reset.json
+          python3 -c 'import json;v=json.load(open("/tmp/nova-password-reset.json"));assert v["ok"] and v["mustChange"] and "temporaryPassword" not in v'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie "$base/api/auth/me")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"email":"second@local.invalid","password":"12345678"}' "$base/api/auth/login")" = "401"
-          temp_password=$(python3 -c 'import json;print(json.load(open("/tmp/nova-password-reset.json"))["temporaryPassword"])')
-          curl -fsS -H 'Content-Type: application/json' -d "{\"email\":\"second@local.invalid\",\"password\":\"$temp_password\"}" "$base/api/auth/login" | grep -q '"must_change_password":true'
+          curl -fsS -H 'Content-Type: application/json' -d '{"email":"second@local.invalid","password":"chosen-by-admin-123"}' "$base/api/auth/login" | grep -q '"must_change_password":true'
           curl -fsS -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d '{"workspaceName":"Development Workspace","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":true,"waitingRoomMessage":"Please wait","aiEnabled":false}' "$base/api/admin/settings" | grep -q true
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"hello"}]}' "$base/api/assistant/chat")" = "403"
           curl -fsS -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d '{"workspaceName":"Development Workspace","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":false,"waitingRoomMessage":"Wait for your host","aiEnabled":true}' "$base/api/admin/settings" | grep -q true
