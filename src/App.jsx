@@ -137,7 +137,10 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
     e.preventDefault();
     setAuthError('');
     if (activeTab === 'join') {
-      setAuthError('Guest video meetings are unavailable until real meeting signaling and lobby controls are deployed.');
+      if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(meetingId)){setAuthError('Enter a valid meeting ID (1–80 letters, digits, - or _).');return;}
+      const target = new URL(window.location.href);
+      target.searchParams.set('room',meetingId);
+      window.location.assign(target.toString());
       return;
     }
     setLoading(true);
@@ -182,14 +185,14 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
             {activeTab === 'join' ? (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Display Name</label>
-                        <input type="text" placeholder="Your Name" value={guestName} required className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-200 transition-all placeholder:text-slate-300" onChange={e => setGuestName(e.target.value)} />
+                        <div className="text-xs text-slate-500 mb-2">Enter the meeting ID, then sign in with your member account. Anonymous guest access is not enabled.</div>
+
                     </div>
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Meeting ID</label>
                         <input type="text" placeholder="123-456-789" value={meetingId} className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-200 transition-all placeholder:text-slate-300" onChange={e => setMeetingId(e.target.value)} />
                     </div>
-                    <button type="submit" disabled={true} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2 disabled:opacity-50 disabled:cursor-not-allowed">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Join Now'}</button>
+                    <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">Continue to Member Sign In</button>
                 </div>
             ) : (
                 <div className="space-y-6 animate-in slide-in-from-left-4 duration-300">
@@ -1946,6 +1949,7 @@ function App() {
   
   // Clean handle end call to manage guest vs user redirection
   const handleMeetingEnd = () => {
+      const target=new URL(window.location.href);target.searchParams.delete('room');window.history.replaceState({},'',target.toString());
       if (user?.isGuest) {
           setUser(null);
           setView('auth');
