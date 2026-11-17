@@ -122,6 +122,7 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
   if site:=r.Header.Get("Sec-Fetch-Site");site!=""&&site!="same-origin"&&site!="none"{fail(w,403,"Cross-site request rejected");return}
  }
  switch r.URL.Path {
+ case "/api/admin/directory":s.adminDirectoryAPI(w,r)
  case "/api/admin/users":s.adminUsersAPI(w,r)
  case "/api/admin/settings":s.adminSettingsAPI(w,r)
  case "/api/admin/logs":s.adminLogsAPI(w,r)
