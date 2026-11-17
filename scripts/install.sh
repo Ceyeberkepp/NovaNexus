@@ -154,9 +154,12 @@ cd "$ROOT_DIR"
 if [[ "$RESUME_INSTALL" == 0 ]]; then
   DB_PASSWORD=$(openssl rand -hex 24)
   ADMIN_PASSWORD=$(openssl rand -hex 20)
+  LIVEKIT_SECRET=$(openssl rand -hex 32)
   cat >.env <<EOF
 DB_PASSWORD=$DB_PASSWORD
 BOOTSTRAP_ADMIN_PASSWORD=$ADMIN_PASSWORD
+LIVEKIT_API_KEY=novanexus
+LIVEKIT_API_SECRET=$LIVEKIT_SECRET
 NOVANEXUS_DOMAIN=$NOVANEXUS_DOMAIN
 TLS_EMAIL=$NOVANEXUS_TLS_EMAIL
 EOF
@@ -172,11 +175,35 @@ else
     printf "BOOTSTRAP_ADMIN_PASSWORD=%s\n" "$ADMIN_PASSWORD" >> .env
     SOURCE_UPDATED=1
   fi
+  if ! grep -q "^LIVEKIT_API_SECRET=" .env; then
+    printf "LIVEKIT_API_KEY=novanexus\nLIVEKIT_API_SECRET=%s\n" "$(openssl rand -hex 32)" >>.env
+    SOURCE_UPDATED=1
+    log "Added private video meeting service credentials to existing deployment."
+  fi
   # The setup code is obsolete; retain credentials and application data.
   sed -i '/^BOOTSTRAP_SETUP_CODE=/d' .env
   log "Reusing previous HTTPS address: $NOVANEXUS_DOMAIN"
 fi
 chmod 600 .env
+LIVEKIT_KEY=$(sed -n "s/^LIVEKIT_API_KEY=//p" .env | head -n1)
+LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
+[[ "$LIVEKIT_KEY" =~ ^[a-zA-Z0-9_-]{3,64}$ && ${#LIVEKIT_SECRET} -ge 32 ]] || fail "Invalid video server credentials."
+[[ "$NOVANEXUS_DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] || fail "Invalid video host address."
+# A single UDP mux port keeps the media setup simple for a one-server LAN deployment.
+# This is a capacity setting, NOT a claim that one server can carry 1000 simultaneous videos.
+cat >livekit.yaml <<LIVEKIT_CONFIGURATION
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  node_ip: "$NOVANEXUS_DOMAIN"
+room:
+  max_participants: 1000
+keys:
+  "$LIVEKIT_KEY": "$LIVEKIT_SECRET"
+LIVEKIT_CONFIGURATION
+chmod 600 livekit.yaml
 if [[ "$TLS_MODE" == internal ]]; then
   # Upgrade existing Caddyfile in place; a resume does not re-clone repository files.
   if ! grep -Eq '^[[:space:]]+default_sni[[:space:]]+' Caddyfile; then
@@ -186,7 +213,7 @@ if [[ "$TLS_MODE" == internal ]]; then
     sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
   fi
 fi
-log "Building Go API and React frontend and starting PostgreSQL + HTTPS"
+log "Building Go API and React frontend and starting PostgreSQL, HTTPS and video media service"
 docker compose config --quiet
 if [[ "$RESUME_INSTALL" == 0 || "$SOURCE_UPDATED" == 1 ]]; then
   docker compose build --pull app
