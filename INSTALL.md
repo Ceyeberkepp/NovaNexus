@@ -21,7 +21,7 @@ On a fresh supported server, **logged in as root**, run this single command:
 apt-get update && apt-get install -y ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh && bash /root/novanexus-install.sh
 ```
 
-The `apt-get` bootstrap is necessary only because no installer can download itself if the operating system has no downloader. The rest is automatic: missing Git, OpenSSL, Docker Engine, Compose v2, database, Go service, frontend and Caddy proxy. On Debian, outdated APT metadata can cause `.deb` 404 errors; `apt-get update` refreshes that metadata. Inspect the script and pin to a reviewed release before using a production system.
+The `apt-get` bootstrap is necessary only because no installer can download itself if the operating system has no downloader. The rest is automatic: missing Git and OpenSSL, Docker Engine and Compose from Docker's **official signed APT repository** (not Debian's missing `docker-compose-v2` or `docker-compose-plugin` packages), database, Go service, frontend and Caddy proxy. On Debian, outdated APT metadata can cause `.deb` 404 errors; `apt-get update` refreshes that metadata. Inspect the script and pin to a reviewed release before using a production system.
 
 ### IP address HTTPS (default)
 
