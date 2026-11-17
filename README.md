@@ -17,6 +17,16 @@ The original visual design is retained and gradually connected to working APIs:
 
 **Important:** These integrations remain development-preview functionality. Real cross-browser media, firewall/NAT, optional large meetings, and security audit must pass before a production deployment.
 
+### Meeting numbers, direct calls and settings
+
+- **Meeting numbers:** NovaNexus reserves unique random eight-digit numbers in PostgreSQL. Join links have the form \`https://10.5.5.51/12345678\` on local IP installs. The number is a sample; the app generates a new one when starting each meeting.
+- **Custom meeting links:** In **Admin → Meetings → Public meeting link domain**, an administrator can select an existing HTTPS origin such as \`https://nexu.cyverax.com\`. Links will then end in \`/12345678\` on that domain. The URL setting does not register DNS, deploy a tunnel, open firewalls or configure TURN/WebRTC media; those must already be working. The video service needs reachable media ports or an appropriate relay.
+- **Chat calls:** Calling a member creates a private ringing record and shows Accept / Decline in the recipient's workspace. Both users join automatically after acceptance; declining does not enter a room. Ringing calls expire automatically.
+- **Video controls:** The meeting toolbar has a bottom-right **More (three dots)** menu for device settings, link copying, local recording and host-managed breakout rooms. The host can create breakouts, assign members and remove rooms. Assigned members are redirected through authenticated tokens.
+- **Recording:** The built-in browser recorder saves a WebM recording of the screen/window selected by the user, when browser permissions allow. Screen audio depends on the browser and the selected capture source; this is not server-side recording, cloud archiving or a recording of every independent feed.
+- **Chat appearance:** Chat Settings → Display preserves the original themes and now adds solid, aurora, dots, grid and waves backgrounds.
+- **Password reset:** Admin → Users lets an administrator choose and confirm a new password of at least eight characters (no generated password), after confirming the administrator's own password. Previous sessions are revoked and the member must change that password at next sign-in.
+
 ## One-click installation (Ubuntu / Debian)
 
 > **Development preview — not production-certified.** This installs the implemented Go API, PostgreSQL, React frontend, HTTPS reverse proxy and LiveKit media service; it does not automatically make guest invitations, webinar-scale conferencing, MFA or MCP production-ready. Review the script before running it with administrator privileges.
