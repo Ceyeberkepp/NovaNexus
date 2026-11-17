@@ -12,12 +12,12 @@ func (s *Server) callsAPI(w http.ResponseWriter,r *http.Request){
  if r.Method=="GET"{
   // Automatically expire calls that nobody answered.
   _,_=s.db.Exec(r.Context(),"UPDATE direct_calls SET status='missed',updated_at=NOW() WHERE status='ringing' AND expires_at<NOW()")
-  rows,e:=s.db.Query(r.Context(),"SELECT c.id,c.caller_id,c.recipient_id,c.room,c.status,c.audio_only,c.created_at,caller.name,recipient.name FROM direct_calls c JOIN users caller ON caller.id=c.caller_id JOIN users recipient ON recipient.id=c.recipient_id WHERE c.caller_id=$1 OR c.recipient_id=$1 ORDER BY c.id DESC LIMIT 30",u.ID)
+  rows,e:=s.db.Query(r.Context(),"SELECT c.id,c.caller_id,c.recipient_id,c.room,c.status,c.audio_only,c.created_at,caller.name,recipient.name,c.answered_at,c.ended_at,c.updated_at FROM direct_calls c JOIN users caller ON caller.id=c.caller_id JOIN users recipient ON recipient.id=c.recipient_id WHERE c.caller_id=$1 OR c.recipient_id=$1 ORDER BY c.id DESC LIMIT 500",u.ID)
   if e!=nil{fail(w,500,"Call status unavailable");return};defer rows.Close()
   items:=make([]map[string]any,0)
-  for rows.Next(){var id,from,to int64;var room,status,fromName,toName string;var audioOnly bool;var at time.Time
-   if e=rows.Scan(&id,&from,&to,&room,&status,&audioOnly,&at,&fromName,&toName);e!=nil{fail(w,500,"Call status unavailable");return}
-   items=append(items,map[string]any{"id":id,"callerId":from,"recipientId":to,"room":room,"status":status,"audioOnly":audioOnly,"callerName":fromName,"recipientName":toName,"createdAt":at})
+  for rows.Next(){var id,from,to int64;var room,status,fromName,toName string;var audioOnly bool;var at,updated time.Time;var answered,ended *time.Time
+   if e=rows.Scan(&id,&from,&to,&room,&status,&audioOnly,&at,&fromName,&toName,&answered,&ended,&updated);e!=nil{fail(w,500,"Call status unavailable");return}
+   items=append(items,map[string]any{"id":id,"callerId":from,"recipientId":to,"room":room,"status":status,"audioOnly":audioOnly,"callerName":fromName,"recipientName":toName,"createdAt":at,"answeredAt":answered,"endedAt":ended,"updatedAt":updated})
   }
   if rows.Err()!=nil{fail(w,500,"Call status unavailable");return}
   respond(w,200,map[string]any{"calls":items});return
@@ -37,13 +37,16 @@ func (s *Server) callsAPI(w http.ResponseWriter,r *http.Request){
   e=s.db.QueryRow(r.Context(),"INSERT INTO direct_calls(caller_id,recipient_id,room,audio_only,expires_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '90 seconds') RETURNING id",u.ID,c.RecipientID,room,c.AudioOnly).Scan(&id)
   if e!=nil{fail(w,500,"Unable to place call");return}
   respond(w,201,map[string]any{"id":id,"room":room,"status":"ringing"})
- case "accept","decline","cancel":
+ case "accept","decline","cancel","end":
   if c.CallID<=0{fail(w,400,"Call ID required");return}
-  status:="declined";allowed:="recipient_id"
-  if c.Action=="accept"{status="accepted"} else if c.Action=="cancel"{status="canceled";allowed="caller_id"}
-  query:="UPDATE direct_calls SET status=$1,updated_at=NOW() WHERE id=$2 AND "+allowed+"=$3 AND status='ringing' AND expires_at>NOW() RETURNING room"
+  status:="declined";allowed:="recipient_id";condition:="status='ringing' AND expires_at>NOW()";extra:=""
+  if c.Action=="accept"{status="accepted";extra=",answered_at=NOW()"}
+  if c.Action=="cancel"{status="canceled";allowed="caller_id"}
+  if c.Action=="end"{status="ended";allowed="(caller_id=$3 OR recipient_id=$3)";condition="status='accepted'";extra=",ended_at=NOW()"}
+  restriction:=allowed+"=$3";if c.Action=="end"{restriction=allowed}
+  query:="UPDATE direct_calls SET status=$1,updated_at=NOW()"+extra+" WHERE id=$2 AND "+restriction+" AND "+condition+" RETURNING room"
   var room string
-  if e=s.db.QueryRow(r.Context(),query,status,c.CallID,u.ID).Scan(&room);e!=nil{fail(w,409,"Call no longer ringing or you cannot answer it");return}
+  if e=s.db.QueryRow(r.Context(),query,status,c.CallID,u.ID).Scan(&room);e!=nil{fail(w,409,"Call is no longer in the required state");return}
   respond(w,200,map[string]any{"room":room,"status":status})
  default:fail(w,400,"Invalid call action")
  }
