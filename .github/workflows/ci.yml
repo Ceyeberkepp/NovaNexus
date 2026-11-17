@@ -21,7 +21,7 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgres://novanexus:test_password_only@127.0.0.1:5432/novanexus
-      BOOTSTRAP_SETUP_CODE: integration-test-setup-code-very-long-secret
+      BOOTSTRAP_ADMIN_PASSWORD: integration-test-temporary-administrator-password-very-long
       NODE_ENV: development
       PORT: 3000
     steps:
@@ -58,10 +58,10 @@ jobs:
           base=http://127.0.0.1:3000
           test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/users")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"email":"admin","password":"admin"}' "$base/api/auth/login")" = "401"
-          curl --fail --silent -c /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"email":"admin","password":"admin","setupCode":"integration-test-setup-code-very-long-secret"}' "$base/api/auth/login" > /tmp/login.json
+          curl --fail --silent -c /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"email":"admin","password":"integration-test-temporary-administrator-password-very-long"}' "$base/api/auth/login" > /tmp/login.json
           grep -q 'must_change_password' /tmp/login.json
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie "$base/api/users")" = "403"
-          curl --fail --silent -b /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"currentPassword":"admin","newPassword":"integration-test-new-secure-password","setupCode":"integration-test-setup-code-very-long-secret"}' "$base/api/auth/change-password" | grep -q 'true'
+          curl --fail --silent -b /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"currentPassword":"integration-test-temporary-administrator-password-very-long","newPassword":"integration-test-new-secure-password"}' "$base/api/auth/change-password" | grep -q 'true'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie "$base/api/users")" = "401"
           curl --fail --silent -c /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"email":"admin","password":"integration-test-new-secure-password"}' "$base/api/auth/login" | grep -q '"Admin"'
           curl --fail --silent -b /tmp/nova-cookie2 "$base/api/users" | grep -q '"users"'
