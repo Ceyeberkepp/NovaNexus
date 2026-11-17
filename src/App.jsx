@@ -1891,7 +1891,9 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
   const [siteLogo,setSiteLogo] = useState('');
-  useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/branding',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.branding){setWorkspaceName(d.branding.workspace_name||'NovaNexus Workspace');setSiteLogo(d.branding.site_logo||'');document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});},[user,currentTab]);
+  const [brandingVersion,setBrandingVersion] = useState(0);
+  useEffect(()=>{const refresh=()=>setBrandingVersion(v=>v+1);window.addEventListener('novanexus:branding-changed',refresh);return()=>window.removeEventListener('novanexus:branding-changed',refresh);},[]);
+  useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/branding',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.branding){setWorkspaceName(d.branding.workspace_name||'NovaNexus Workspace');setSiteLogo(d.branding.site_logo||'');document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});},[user,currentTab,brandingVersion]);
   const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
