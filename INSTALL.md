@@ -13,69 +13,28 @@ operate Docker manually. The installer downloads everything needed via apt and
 builds/runs the application. The frontend build uses Node only inside the
 builder container; users do not install Node or Go on their host.
 
-## One command
+## One command: Debian 13 and Ubuntu
 
-On a **fresh supported Ubuntu/Debian server**, download and run a **reviewed,
-tested release** of the installer with the following structure (replace the
-release tag with a published, validated tag):
+On a fresh supported server, **logged in as root**, run this single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/RELEASE_TAG/scripts/install.sh | sudo env NOVANEXUS_REF=RELEASE_TAG bash
+apt-get update && apt-get install -y ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh && bash /root/novanexus-install.sh
 ```
 
-A fresh server must already have a way to download the bootstrap script
-(`curl` in the example); **no remote installer can download itself without an
-existing network/download facility**. Once the installer starts it automatically
-installs missing Git, curl, CA certificates, OpenSSL, Docker Engine and
-Docker Compose v2. It then pulls NovaNexus, builds the Go and React app, creates
-PostgreSQL credentials and the one-time administrator setup code, and starts
-and verifies the complete packaged stack.
+The `apt-get` bootstrap is necessary only because no installer can download itself if the operating system has no downloader. The rest is automatic: missing Git, OpenSSL, Docker Engine, Compose v2, database, Go service, frontend and Caddy proxy. On Debian, outdated APT metadata can cause `.deb` 404 errors; `apt-get update` refreshes that metadata. Inspect the script and pin to a reviewed release before using a production system.
 
-For safer operation, download the script separately, inspect it and verify
-its release integrity before running it as root. Avoid piping unreviewed
-moving-branch code into sudo.
+### IP address HTTPS (default)
 
-### Minimal Debian 13 / root shell
+The installer detects the server IPv4 address automatically and serves the app at `https://SERVER_IP`. No domain and no certificate email are required. Caddy issues an encrypted IP certificate through a **private local CA**. The installer verifies HTTPS against that CA and exports `/opt/novanexus/novanexus-local-root-ca.crt`. Browsers on other computers will show an untrusted certificate warning until you explicitly trust that CA on each client. Never install that CA on devices you do not manage.
 
-Minimal Debian containers and hosts may not include `sudo` or `curl`. If your
-prompt is `root@server:~#`, you are already root: run the script with `bash`,
-not `sudo`. First install the bootstrap downloader:
+For public-domain HTTPS, set `NOVANEXUS_DOMAIN=your.example.com` and optionally `NOVANEXUS_TLS_EMAIL=you@example.com` when launching the script; public DNS and reachable port 80/443 are required. The installer does not set router port forwarding or DNS records.
 
-```bash
-apt clean
-rm -rf /var/lib/apt/lists/*
-apt update
-apt install -y ca-certificates curl
-```
+This is not yet production-certified. Docker must be permitted by the VM/container host, and no installed software may already own the needed ports.
+## Prerequisites and limitations
 
-The `404 Not Found` error for a Debian `.deb` package typically indicates
-outdated package metadata or an out-of-sync mirror. If `apt update` fails,
-repair its repository configuration before continuing rather than bypassing
-signature verification or downloading random package files.
+Ubuntu/Debian x86_64 or ARM64, root privileges, systemd, outbound package and container-registry access, and free TCP ports 80 and 443. The auto-detected IP must be reachable from the browser. On public DNS mode, a public address and certificate email are needed.
 
-Then download, inspect and execute the reviewed script:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh
-bash -n /root/novanexus-install.sh
-bash /root/novanexus-install.sh
-```
-
-Use an audited release tag when one exists. This remains a development-preview
-path, not a certified production installation.
-
-## Prompts and prerequisites
-
-The installer asks only for the public DNS name and TLS registration email,
-unless `NOVANEXUS_DOMAIN` and `NOVANEXUS_TLS_EMAIL` are already supplied.
-It requires Ubuntu or Debian, an x86_64 or ARM64 host, systemd, root privileges,
-outbound network access, a public DNS name resolving to the host, and inbound
-TCP 80/443 to issue a publicly trusted certificate. It refuses to overwrite an
-existing `/opt/novanexus` installation. If installation or HTTPS verification
-fails, it exits with an error; it **does not** report the app as ready.
-
-No manual PostgreSQL, Go, Node.js, Nginx, Caddy or Docker commands are needed
-for the supported installation path.
+A one-command installer cannot override host networking or virtualization restrictions. IP-only mode provides encrypted HTTPS with a **private**, not publicly trusted, CA; user devices require a one-time trust setup to eliminate warnings. The app still has unfinished features and must not be treated as production-ready.
 
 ## First-time administrator
 
