@@ -117,7 +117,7 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required."
 if [[ "$TLS_MODE" == public ]]; then
   getent ahosts "$NOVANEXUS_DOMAIN" >/dev/null || fail "DNS does not resolve $NOVANEXUS_DOMAIN. Set the DNS record first."
 fi
-if command -v ss >/dev/null; then
+if [[ "$RESUME_INSTALL" == 0 ]] && command -v ss >/dev/null; then
   for port in 80 443; do
     if ss -H -ltn | awk '{print $4}' | grep -Eq "[:.]${port}$"; then
       fail "TCP port $port is already in use; free it before installation."
@@ -167,17 +167,28 @@ if [[ "$TLS_MODE" == internal ]]; then
   CURL_CA=(--cacert "$CA_FILE")
 fi
 verified=false
-for attempt in $(seq 1 15); do
-  if curl --fail --silent --connect-timeout 4 --max-time 8 "${CURL_CA[@]}" "https://$NOVANEXUS_DOMAIN/api/health" 2>/dev/null | grep -q '"ok"'; then
-    verified=true; break
+# Verify the local HTTPS listener independently of LAN routing and proxy env vars.
+# Preserve the requested IP address for TLS name/SAN verification while routing to loopback.
+HEALTH_URL="https://$NOVANEXUS_DOMAIN/api/health"
+CURL_OPTIONS=(--noproxy "*" --resolve "$NOVANEXUS_DOMAIN:443:127.0.0.1" --fail --silent --show-error --connect-timeout 4 --max-time 10)
+for attempt in $(seq 1 24); do
+  if HEALTH_RESPONSE=$(curl "${CURL_OPTIONS[@]}" "${CURL_CA[@]}" "$HEALTH_URL" 2>&1); then
+    if [[ "$HEALTH_RESPONSE" == *'"status":"ok"'* ]]; then
+      verified=true
+      break
+    fi
+  fi
+  if [[ "$attempt" == 1 || "$attempt" == 12 || "$attempt" == 24 ]]; then
+    log "HTTPS health check attempt $attempt/24: ${HEALTH_RESPONSE:-no response}"
   fi
   sleep 2
 done
 if [[ "$verified" != true ]]; then
   docker compose logs --tail=60 https app db >&2 || true
-  fail "HTTPS health verification failed; NOT marking installation complete."
+  fail "Local HTTPS health verification failed. Proxy settings, certificate mismatch or application health may be responsible; inspect the error above."
 fi
-printf "\nNovaNexus HTTPS check passed: https://%s\n" "$NOVANEXUS_DOMAIN"
+printf "\nNovaNexus local HTTPS check passed: https://%s\n" "$NOVANEXUS_DOMAIN"
+log "The local HTTPS endpoint passed its certificate and API checks. LAN reachability depends on your network/firewall."
 if [[ "$TLS_MODE" == internal ]]; then
   printf "Local TLS root certificate: %s\n" "$CA_FILE"
   printf "Trust this CA on browser devices to avoid HTTPS warnings.\n"
