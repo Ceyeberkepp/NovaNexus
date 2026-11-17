@@ -23,7 +23,7 @@ This single command installs the bootstrap downloader if needed, then launches t
 **Note:** A container or VM must permit Docker and port 443; host-level restrictions cannot be bypassed by an installer. An existing installation is not overwritten.
 
 For details see [INSTALL.md](INSTALL.md). **This is a development preview, not a production-certified installer.**
-**First login:** username `admin`, temporary password `admin`, plus the random setup code displayed by the installer. Changing the password is mandatory. The setup code is also saved in the root-only `/opt/novanexus/.env`.
+**Web GUI:** the installer prints `NovaNexus Web GUI: https://SERVER_IP/` at completion. **First login:** username `admin` with a unique randomly generated temporary password printed at installation (no setup code). You must change the password before opening the dashboard. The current bootstrap password is saved in the root-only `/opt/novanexus/.env`.
 
 For installation details, supported environments and known blockers see [INSTALL.md](INSTALL.md). **Never use this development-preview installer on a production host until deployment and release validation are completed.**
 
