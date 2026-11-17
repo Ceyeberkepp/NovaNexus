@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Users,Shield,Calendar,Image as ImageIcon,ScrollText,Settings,Save,RefreshCw,Sparkles,Clock,UserPlus} from 'lucide-react';
+import {Users,Shield,Calendar,Image as ImageIcon,ScrollText,Settings,Save,RefreshCw,Sparkles,Clock,UserPlus,Edit2} from 'lucide-react';
 import {fetchUsers,provisionUser} from './auth-client';
 
 async function adminRequest(path,options={}){
