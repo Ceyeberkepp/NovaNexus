@@ -2060,8 +2060,7 @@ function App() {
                 <NavItem icon={<LayoutGrid />} label="Overview" active={currentTab === 'dashboard'} onClick={() => setCurrentTab('dashboard')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<MessageCircle />} label="Chat" active={currentTab === 'chats'} onClick={() => setCurrentTab('chats')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Phone />} label="Calls" active={currentTab === 'calls'} onClick={() => setCurrentTab('calls')} collapsed={sidebarCollapsed} />
-                <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'calls' && <CallsPanel user={user} users={users} />}
-                {currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
+                <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Sparkles />} label="AI Assistant" active={currentTab === 'ai'} onClick={() => setCurrentTab('ai')} collapsed={sidebarCollapsed} />
                 {user?.role === 'Admin' && <NavItem icon={<Shield />} label="Admin" active={currentTab === 'admin'} onClick={() => setCurrentTab('admin')} collapsed={sidebarCollapsed} />}
               </nav>
@@ -2148,8 +2147,8 @@ function App() {
                         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                             <div className="p-8 border-b border-slate-50 flex justify-between items-center">
                                 <h3 className="font-bold text-slate-800 text-sm">Active Team Members</h3>
-                                <button className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors flex items-center gap-2">
-                                    <UserPlus size={12}/> Invite New
+                                <button disabled={user?.role!=='Admin'} title={user?.role==='Admin'?'Open Admin Users to create a member':'Administrator access required'} onClick={()=>setCurrentTab('admin')} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors flex items-center gap-2 disabled:opacity-40">
+                                    <UserPlus size={12}/> Add Member
                                 </button>
                             </div>
                             <div className="p-2">
@@ -2178,11 +2177,8 @@ function App() {
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex items-center justify-end gap-3">
-                                                        <span className={`flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${u.status === 'online' ? 'text-green-600' : u.status === 'busy' ? 'text-red-500' : 'text-slate-400'}`}>
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 animate-pulse' : u.status === 'busy' ? 'bg-red-500' : 'bg-slate-300'}`}></div>
-                                                            <span className="hidden sm:inline">{u.status}</span>
-                                                        </span>
-                                                        <button className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                                                        <span className="text-[10px] font-medium text-slate-400">Member</span>
+                                                        <button aria-label={'Call '+u.name} onClick={()=>window.dispatchEvent(new CustomEvent('novanexus:call',{detail:{recipientId:u.id,name:u.name,audioOnly:true}}))} className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100">
                                                             <Phone size={14}/>
                                                         </button>
                                                     </div>
@@ -2197,6 +2193,7 @@ function App() {
                     </div>
                 )}
                 {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} currentUser={user} />}
+                {currentTab === 'calls' && <CallsPanel user={user} users={users} />}
                 {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
                 {currentTab === 'ai' && <WorkspaceAssistant />}
                 {currentTab === 'admin' && (user?.role === 'Admin' ? <AdminConsole users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
@@ -2213,7 +2210,8 @@ function App() {
                   <MessageCircle size={24} />
                   <span className="text-[10px] font-bold">Chat</span>
               </button>
-              <button onClick={() => setCurrentTab('schedule')} className={`flex flex-col items-center gap-1 ${currentTab === 'schedule' ? 'text-indigo-600' : 'text-slate-400'}`}>
+              <button onClick={() => setCurrentTab('calls')} className={`flex flex-col items-center gap-1 ${currentTab === 'calls' ? 'text-indigo-600' : 'text-slate-400'}`}><Phone size={24}/><span className="text-[10px] font-bold">Calls</span></button>
+               <button onClick={() => setCurrentTab('schedule')} className={`flex flex-col items-center gap-1 ${currentTab === 'schedule' ? 'text-indigo-600' : 'text-slate-400'}`}>
                   <Calendar size={24} />
                   <span className="text-[10px] font-bold">Plan</span>
               </button>
