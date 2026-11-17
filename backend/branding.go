@@ -10,7 +10,7 @@ import (
 func publicBrandingAPI(s *Server,w http.ResponseWriter,r *http.Request){
  if r.Method!="GET"{fail(w,405,"Method not allowed");return}
  values:=map[string]string{"workspace_name":"NovaNexus Workspace"}
- rows,e:=s.db.Query(r.Context(),"SELECT name,value FROM app_settings WHERE name IN ('workspace_name','site_logo','login_logo','favicon')")
+ rows,e:=s.db.Query(r.Context(),"SELECT name,value FROM app_settings WHERE name IN ('workspace_name','site_logo','login_logo','favicon','waiting_logo')")
  if e!=nil{fail(w,500,"Branding unavailable");return}
  defer rows.Close()
  for rows.Next(){var key,val string;if rows.Scan(&key,&val)==nil{values[key]=val}}
@@ -22,7 +22,7 @@ func (s *Server) adminBrandingAPI(w http.ResponseWriter,r *http.Request){
  if r.Method!="PUT"{fail(w,405,"Method not allowed");return}
  var c struct{Key,Data string}
  if json.NewDecoder(http.MaxBytesReader(w,r.Body,240000)).Decode(&c)!=nil{fail(w,400,"Invalid image upload");return}
- if c.Key!="site_logo"&&c.Key!="login_logo"&&c.Key!="favicon"{fail(w,400,"Unknown branding asset");return}
+ if c.Key!="site_logo"&&c.Key!="login_logo"&&c.Key!="favicon"&&c.Key!="waiting_logo"{fail(w,400,"Unknown branding asset");return}
  if c.Data!=""{
   split:=strings.SplitN(c.Data,",",2)
   if len(split)!=2||!strings.HasPrefix(split[0],"data:image/")||!strings.HasSuffix(split[0],";base64"){fail(w,400,"Use a PNG, JPEG or WebP image");return}
