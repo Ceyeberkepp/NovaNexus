@@ -65,5 +65,22 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie "$base/api/users")" = "401"
           curl --fail --silent -c /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"email":"admin","password":"integration-test-new-secure-password"}' "$base/api/auth/login" | grep -q '"Admin"'
           curl --fail --silent -b /tmp/nova-cookie2 "$base/api/users" | grep -q '"users"'
+      - name: Verify eight-character passwords, persisted calendar and direct messages
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:3000
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"name":"Second User","email":"second@local.invalid","password":"1234567"}' "$base/api/users")" = "400"
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"name":"Second User","email":"second@local.invalid","password":"12345678"}' "$base/api/users" > /tmp/nova-second.json
+          grep -q 'second@local.invalid' /tmp/nova-second.json
+          second_id=$(python3 -c 'import json; print(json.load(open("/tmp/nova-second.json"))["user"]["id"])')
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"title":"Persisted Calendar Event","date":"2026-12-01","time":"14:30","duration":60}' "$base/api/calendar" | grep -q 'Persisted Calendar Event'
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/calendar" | grep -q 'Persisted Calendar Event'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"text":"Hello from backend integration"}' "$base/api/messages?peer=$second_id" | grep -q 'Hello from backend integration'
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/messages?peer=$second_id" | grep -q 'Hello from backend integration'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/calendar")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/messages?peer=$second_id")" = "401"
+          curl -fsS -c /tmp/nova-second-cookie -H 'Content-Type: application/json' -d '{"email":"second@local.invalid","password":"12345678"}' "$base/api/auth/login" > /tmp/nova-second-login.json
+          curl -fsS -b /tmp/nova-second-cookie "$base/api/messages?peer=1" | grep -q 'Hello from backend integration'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie "$base/api/calendar")" = "200"
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
