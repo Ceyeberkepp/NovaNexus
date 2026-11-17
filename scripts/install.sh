@@ -156,7 +156,17 @@ if [[ "$TLS_MODE" == internal ]]; then
 fi
 log "Building Go API and React frontend and starting PostgreSQL + HTTPS"
 docker compose config --quiet
-docker compose build --pull app
+if [[ "$RESUME_INSTALL" == 0 ]]; then
+  docker compose build --pull app
+else
+  # A verification retry should not rebuild an already running application.
+  if ! docker compose images -q app 2>/dev/null | grep -q .; then
+    log "No existing application image found; building it now."
+    docker compose build --pull app
+  else
+    log "Reusing the existing application image and database."
+  fi
+fi
 docker compose up -d --wait --wait-timeout 240
 log "Checking HTTPS certificate and application health"
 CURL_CA=()
