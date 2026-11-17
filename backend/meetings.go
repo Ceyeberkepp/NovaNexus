@@ -47,8 +47,11 @@ func (s *Server) meetingTokenAPI(w http.ResponseWriter,r *http.Request){
  if asJSON(r,&request)!=nil{fail(w,400,"Invalid meeting request");return}
  request.Room=strings.TrimSpace(request.Room)
  if !meetingIDPattern.MatchString(request.Room) {fail(w,400,"Room ID must contain 1–80 letters, digits, underscores or hyphens");return}
- if request.MaxParticipants==0{request.MaxParticipants=1000}
- if request.MaxParticipants<1||request.MaxParticipants>1000{fail(w,400,"Meeting capacity must be 1 to 1000");return}
+ var setting string
+ if e=s.db.QueryRow(r.Context(),"SELECT value FROM app_settings WHERE name='default_meeting_limit'").Scan(&setting);e!=nil{fail(w,503,"Meeting settings unavailable");return}
+ ceiling,e:=strconv.Atoi(setting);if e!=nil||ceiling<1||ceiling>1000{fail(w,503,"Invalid meeting capacity configuration");return}
+ if request.MaxParticipants==0{request.MaxParticipants=ceiling}
+ if request.MaxParticipants<1||request.MaxParticipants>1000||request.MaxParticipants>ceiling{fail(w,400,"Meeting capacity must be between 1 and the configured workspace limit");return}
  token,e:=meetingToken(secret,key,request.Room,u,request.MaxParticipants)
  if e!=nil{fail(w,500,"Unable to start meeting");return}
  // LiveKit signaling is proxied by Caddy at the same HTTPS origin.
