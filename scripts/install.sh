@@ -51,6 +51,7 @@ if [[ -e "$ROOT_DIR" && ! -f "$ROOT_DIR/.env" ]]; then
   fail "$ROOT_DIR already exists without a saved configuration. Refusing to overwrite unknown data."
 fi
 RESUME_INSTALL=0
+SOURCE_UPDATED=0
 if [[ -f "$ROOT_DIR/.env" ]]; then
   [[ -f "$ROOT_DIR/docker-compose.yml" && -f "$ROOT_DIR/Caddyfile" ]] || fail "Incomplete previous deployment."
   RESUME_INSTALL=1
@@ -137,25 +138,43 @@ fi
 log "Fetching the selected NovaNexus source"
 if [[ "$RESUME_INSTALL" == 0 ]]; then
   git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$ROOT_DIR"
+else
+  # Only installer-managed Caddyfile modifications may be overwritten during upgrade.
+  unmanaged=$(git -C "$ROOT_DIR" diff --name-only HEAD | grep -v "^Caddyfile$" || true)
+  [[ -z "$unmanaged" ]] || fail "Local application edits detected. Refusing to overwrite: $unmanaged"
+  git -C "$ROOT_DIR" fetch --quiet --depth 1 origin "$REF" || fail "Could not fetch current NovaNexus source."
+  if [[ "$(git -C "$ROOT_DIR" rev-parse HEAD)" != "$(git -C "$ROOT_DIR" rev-parse FETCH_HEAD)" ]]; then
+    log "Updating previously installed application code while preserving .env and database volumes."
+    git -C "$ROOT_DIR" reset --hard FETCH_HEAD >/dev/null
+    SOURCE_UPDATED=1
+  fi
 fi
 cd "$ROOT_DIR"
 [[ -f Dockerfile && -f docker-compose.yml && -f Caddyfile && -f go.mod ]] || fail "The selected source ref does not contain all required services."
 if [[ "$RESUME_INSTALL" == 0 ]]; then
   DB_PASSWORD=$(openssl rand -hex 24)
-  SETUP_CODE=$(openssl rand -hex 24)
+  ADMIN_PASSWORD=$(openssl rand -hex 20)
   cat >.env <<EOF
 DB_PASSWORD=$DB_PASSWORD
-BOOTSTRAP_SETUP_CODE=$SETUP_CODE
+BOOTSTRAP_ADMIN_PASSWORD=$ADMIN_PASSWORD
 NOVANEXUS_DOMAIN=$NOVANEXUS_DOMAIN
 TLS_EMAIL=$NOVANEXUS_TLS_EMAIL
 EOF
 else
   stored_address=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' .env | head -n 1)
-  SETUP_CODE=$(sed -n 's/^BOOTSTRAP_SETUP_CODE=//p' .env | head -n 1)
-  [[ -n "$stored_address" && -n "$SETUP_CODE" ]] || fail "Existing .env is incomplete; refusing credential rotation."
+  [[ -n "$stored_address" ]] || fail "Existing .env is incomplete."
   NOVANEXUS_DOMAIN=$stored_address
   if valid_ipv4 "$NOVANEXUS_DOMAIN"; then TLS_MODE=internal; else TLS_MODE=public; fi
-  log "Reusing prior HTTPS address: $NOVANEXUS_DOMAIN"
+  ADMIN_PASSWORD=$(sed -n 's/^BOOTSTRAP_ADMIN_PASSWORD=//p' .env | head -n 1)
+  if [[ -z "$ADMIN_PASSWORD" ]]; then
+    log "Migrating the pending administrator account from legacy setup-code authentication."
+    ADMIN_PASSWORD=$(openssl rand -hex 20)
+    printf "BOOTSTRAP_ADMIN_PASSWORD=%s\n" "$ADMIN_PASSWORD" >> .env
+    SOURCE_UPDATED=1
+  fi
+  # The setup code is obsolete; retain credentials and application data.
+  sed -i '/^BOOTSTRAP_SETUP_CODE=/d' .env
+  log "Reusing previous HTTPS address: $NOVANEXUS_DOMAIN"
 fi
 chmod 600 .env
 if [[ "$TLS_MODE" == internal ]]; then
@@ -169,7 +188,7 @@ if [[ "$TLS_MODE" == internal ]]; then
 fi
 log "Building Go API and React frontend and starting PostgreSQL + HTTPS"
 docker compose config --quiet
-if [[ "$RESUME_INSTALL" == 0 ]]; then
+if [[ "$RESUME_INSTALL" == 0 || "$SOURCE_UPDATED" == 1 ]]; then
   docker compose build --pull app
 else
   # A verification retry should not rebuild an already running application.
@@ -213,12 +232,15 @@ if [[ "$verified" != true ]]; then
   docker compose logs --tail=60 https app db >&2 || true
   fail "Local HTTPS health verification failed. Proxy settings, certificate mismatch or application health may be responsible; inspect the error above."
 fi
-printf "\nNovaNexus local HTTPS check passed: https://%s\n" "$NOVANEXUS_DOMAIN"
+printf "\n==========================================\n"
+printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
+printf "==========================================\n"
 log "The local HTTPS endpoint passed its certificate and API checks. LAN reachability depends on your network/firewall."
 if [[ "$TLS_MODE" == internal ]]; then
   printf "Local TLS root certificate: %s\n" "$CA_FILE"
   printf "Trust this CA on browser devices to avoid HTTPS warnings.\n"
 fi
-printf "Initial username: admin\nTemporary password: admin\nOne-time installation setup code: %s\n" "$SETUP_CODE"
+printf "Administrator username: admin\nInitial password: %s\n" "$ADMIN_PASSWORD"
+printf "The initial password expires after you change it on first login.\n"
 printf "You must change the admin password before the dashboard unlocks.\n"
 printf "Root-only deployment settings: %s/.env\n" "$ROOT_DIR"
