@@ -11,7 +11,7 @@ COPY go.mod ./
 COPY backend ./backend
 RUN go mod tidy && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /novanexus ./backend
 
-FROM alpine:3.21
+FROM alpine:3.24
 RUN addgroup -S nova && adduser -S -G nova nova && apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=frontend /app/dist ./dist
