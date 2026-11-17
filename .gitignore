@@ -4,3 +4,5 @@ dist/
 .env.*
 !.env.example
 .DS_Store
+livekit.yaml
+novanexus-local-root-ca.crt
