@@ -127,6 +127,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
   }, [prefilledRoom]);
 
   const [authError, setAuthError] = useState('');
+  const [setupCode, setSetupCode] = useState('');
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -140,12 +141,12 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, setupCode })
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Sign-in failed');
       setUser(result.user);
-      setView('dashboard');
+      setView(result.user.must_change_password ? 'change-password' : 'dashboard');
     } catch (error) {
       setAuthError(error.message || 'Sign-in failed');
     } finally {
@@ -201,7 +202,11 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
                         <input type="password" placeholder="••••••••" value={password} required className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-200 transition-all placeholder:text-slate-300" onChange={e => setPassword(e.target.value)} />
                     </div>
-                    <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Sign In'}</button>
+                    <div>
+<label className="block text-[10px] font-bold text-slate-400 uppercase mb-2" htmlFor="bootstrap-code">One-time setup code (first login only)</label>
+<input id="bootstrap-code" type="password" autoComplete="off" value={setupCode} onChange={e=>setSetupCode(e.target.value)} placeholder="Leave blank after initial setup" className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+</div>
+<button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Sign In'}</button>
                 </div>
             )}
             </form>
@@ -1840,6 +1845,49 @@ const SecureUserManagement = ({ users, setUsers }) => {
   );
 };
 
+
+const ChangeInitialPassword = ({ onComplete }) => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [repeatPassword, setRepeatPassword] = useState('');
+  const [setupCode, setSetupCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+    if (newPassword !== repeatPassword) {setError('New passwords must match');return;}
+    if (newPassword.length < 16 || newPassword === currentPassword) {setError('Use a different password with at least 16 characters');return;}
+    setBusy(true);
+    try {
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({currentPassword,newPassword,setupCode})
+      });
+      const result = await response.json();
+      if(!response.ok) throw new Error(result.error || 'Unable to change password');
+      onComplete();
+    } catch(e) {setError(e.message);}
+    finally {setBusy(false);}
+  }
+  return <div className="min-h-screen flex justify-center items-center bg-slate-100 p-4">
+    <form onSubmit={submit} className="bg-white rounded-2xl p-8 shadow max-w-md w-full grid gap-4">
+      <h1 className="font-bold text-2xl">Change administrator password</h1>
+      <p className="text-slate-600 text-sm">The initial admin password must be replaced before accessing NovaNexus. Your session will end after the password is changed.</p>
+      <label htmlFor="current-password">Current password</label>
+      <input id="current-password" className="border p-3 rounded" type="password" required value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}/>
+      <label htmlFor="setup-code-change">One-time installation setup code</label>
+      <input id="setup-code-change" className="border p-3 rounded" type="password" required value={setupCode} onChange={e=>setSetupCode(e.target.value)}/>
+      <label htmlFor="new-password">New password (16+ characters)</label>
+      <input id="new-password" className="border p-3 rounded" type="password" minLength={16} required value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
+      <label htmlFor="repeat-password">Confirm new password</label>
+      <input id="repeat-password" className="border p-3 rounded" type="password" minLength={16} required value={repeatPassword} onChange={e=>setRepeatPassword(e.target.value)}/>
+      {error && <p role="alert" className="text-red-700">{error}</p>}
+      <button disabled={busy} type="submit" className="bg-indigo-600 text-white p-3 rounded"> {busy?'Changing...':'Change password and sign in again'} </button>
+    </form>
+  </div>;
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('auth'); 
@@ -1863,7 +1911,7 @@ function App() {
         const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
         if (response.ok) {
           const data = await response.json();
-          if (active) { setUser(data.user); setView('dashboard'); }
+          if (active) { setUser(data.user); setView(data.user.must_change_password ? 'change-password' : 'dashboard'); }
         }
       } catch (error) {
         console.error('Authentication service unavailable', error);
@@ -1906,6 +1954,7 @@ function App() {
   };
 
   if (authLoading) return <div className="min-h-screen flex items-center justify-center" role="status">Checking your session...</div>;
+  if (view === 'change-password') return <ChangeInitialPassword onComplete={() => {setUser(null);setView('auth');}} />;
   if (view === 'auth') return <AuthScreen setUser={setUser} setView={setView} prefilledRoom={meetingRoom} />;
   if (view === 'meeting') return <VideoRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} />; 
 
