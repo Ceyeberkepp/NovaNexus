@@ -12,6 +12,9 @@ export default function MeetingRoom({roomId,user,onEnd}) {
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(false);
   const [ended,setEnded] = useState(false);
+  const [copyFeedback,setCopyFeedback] = useState('');
+  const shareUrl=window.location.origin+'/?room='+encodeURIComponent(roomId||'');
+  async function copyInvite(){try{await navigator.clipboard.writeText(shareUrl);setCopyFeedback('Invite link copied.');}catch{setCopyFeedback('Select and copy the invite link below.');}}
 
   async function join() {
     if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(roomId||'')) {
@@ -37,7 +40,8 @@ export default function MeetingRoom({roomId,user,onEnd}) {
     finally{setLoading(false);}
   }
   const leave=()=>{setEnded(true);onEnd();};
-  if(connection&&!ended)return <div className="h-screen w-screen bg-zinc-950 text-white" data-lk-theme="default">
+  if(connection&&!ended)return <div className="h-screen w-screen bg-zinc-950 text-white relative" data-lk-theme="default">
+    <div className="absolute top-3 left-3 z-50 rounded-xl bg-zinc-900/90 border border-white/10 text-white p-2 flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold">Meeting: {roomId}</span><button className="rounded-lg bg-indigo-600 px-3 py-2" onClick={copyInvite}>Copy invite link</button>{copyFeedback&&<span role="status">{copyFeedback}</span>}</div>
     <LiveKitRoom
       serverUrl={connection.serverUrl}
       token={connection.token}
@@ -56,6 +60,7 @@ export default function MeetingRoom({roomId,user,onEnd}) {
       <h1 className="text-2xl font-bold">NovaNexus Video Meeting</h1>
       <div className="text-slate-300">Room: <strong>{roomId}</strong></div>
       <div className="text-slate-300">Signed in as {user?.name||'Member'}</div>
+      <label className="grid gap-2 text-sm">Share meeting link<input aria-label="Meeting invitation link" readOnly className="w-full rounded-lg text-slate-900 p-3" value={shareUrl}/></label><button type="button" onClick={copyInvite} className="rounded-lg border border-slate-500 px-4 py-2 text-sm">Copy meeting link</button>{copyFeedback&&<p role="status" className="text-sm text-slate-300">{copyFeedback}</p>}
       <label className="grid gap-2 font-medium" htmlFor="meeting-limit">
         Maximum participants (1–{workspaceLimit})
         <input id="meeting-limit" className="w-full rounded-lg text-slate-900 p-3"
