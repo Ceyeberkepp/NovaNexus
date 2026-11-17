@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect,useState} from 'react';
 import {LiveKitRoom, VideoConference} from '@livekit/components-react';
 import '@livekit/components-styles';
 
@@ -6,6 +6,8 @@ import '@livekit/components-styles';
 // active-speaker layouts, in-room chat and a real leave button.
 export default function MeetingRoom({roomId,user,onEnd}) {
   const [maxParticipants,setMaxParticipants] = useState(1000);
+  const [workspaceLimit,setWorkspaceLimit] = useState(1000);
+  useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}}).catch(()=>{});return ()=>{active=false;};},[]);
   const [connection,setConnection] = useState(null);
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(false);
@@ -16,8 +18,8 @@ export default function MeetingRoom({roomId,user,onEnd}) {
       setError('Meeting ID must use letters, numbers, - or _ (maximum 80 characters).');
       return;
     }
-    if(!Number.isInteger(maxParticipants)||maxParticipants<1||maxParticipants>1000){
-      setError('Meeting capacity must be between 1 and 1000.');
+    if(!Number.isInteger(maxParticipants)||maxParticipants<1||maxParticipants>workspaceLimit){
+      setError('Meeting capacity must be between 1 and the administrator's configured limit.');
       return;
     }
     setLoading(true);setError('');
@@ -55,9 +57,9 @@ export default function MeetingRoom({roomId,user,onEnd}) {
       <div className="text-slate-300">Room: <strong>{roomId}</strong></div>
       <div className="text-slate-300">Signed in as {user?.name||'Member'}</div>
       <label className="grid gap-2 font-medium" htmlFor="meeting-limit">
-        Maximum participants (1–1000)
+        Maximum participants (1–{workspaceLimit})
         <input id="meeting-limit" className="w-full rounded-lg text-slate-900 p-3"
-          type="number" min={1} max={1000} step={1} value={maxParticipants}
+          type="number" min={1} max={workspaceLimit} step={1} value={maxParticipants}
           onChange={e=>setMaxParticipants(Number(e.target.value))} />
       </label>
       <p className="text-xs text-slate-400">
