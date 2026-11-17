@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut } from './auth-client';
 import { 
   Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
   Link as LinkIcon, Monitor, Lock, AlertTriangle, Mic, MicOff, Camera, 
@@ -126,34 +127,25 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
     }
   }, [prefilledRoom]);
 
+  const [authError, setAuthError] = useState('');
+  const [setupCode, setSetupCode] = useState('');
   const handleLogin = async (e) => {
     e.preventDefault();
+    setAuthError('');
+    if (activeTab === 'join') {
+      setAuthError('Guest video meetings are unavailable until real meeting signaling and lobby controls are deployed.');
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
-        if (activeTab === 'join') {
-             // Guest Logic - STRICTLY NO DASHBOARD
-             const u = { 
-                 id: `guest-${Date.now()}`, 
-                 name: guestName || 'Guest User', 
-                 role: 'Guest', 
-                 isGuest: true, 
-                 room: meetingId 
-             };
-             setUser(u);
-             setView('meeting'); // Force meeting view
-        } else {
-             // Member Logic
-             const u = { 
-                 id: 'demo-admin', 
-                 name: 'Demo Administrator', 
-                 email: email || 'admin@nexus.corp', 
-                 role: 'Admin' 
-             };
-             setUser(u);
-             setView('dashboard'); // Members go to dashboard
-        }
-        setLoading(false);
-    }, 800);
+    try {
+      const result = await signIn(email, password, setupCode);
+      setUser(result.user);
+      setView(result.user.must_change_password ? 'change-password' : 'dashboard');
+    } catch (error) {
+      setAuthError(error.message || 'Sign-in failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -178,7 +170,8 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
             <button onClick={() => setActiveTab('login')} className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'login' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}>Member Login</button>
         </div>
 
-        {/* Form Section */}
+        {authError && <p role="alert" className="mx-8 mt-4 text-sm text-red-700">{authError}</p>}
+              {/* Form Section */}
         <div className="p-8 pt-8">
             <form onSubmit={handleLogin} className="space-y-6">
             {activeTab === 'join' ? (
@@ -191,7 +184,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Meeting ID</label>
                         <input type="text" placeholder="123-456-789" value={meetingId} className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-200 transition-all placeholder:text-slate-300" onChange={e => setMeetingId(e.target.value)} />
                     </div>
-                    <button type="submit" disabled={loading || !meetingId} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2 disabled:opacity-50 disabled:cursor-not-allowed">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Join Now'}</button>
+                    <button type="submit" disabled={true} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2 disabled:opacity-50 disabled:cursor-not-allowed">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Join Now'}</button>
                 </div>
             ) : (
                 <div className="space-y-6 animate-in slide-in-from-left-4 duration-300">
@@ -203,14 +196,18 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
                         <input type="password" placeholder="••••••••" value={password} required className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-200 transition-all placeholder:text-slate-300" onChange={e => setPassword(e.target.value)} />
                     </div>
-                    <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Sign In'}</button>
+                    <div>
+<label className="block text-[10px] font-bold text-slate-400 uppercase mb-2" htmlFor="bootstrap-code">One-time setup code (first login only)</label>
+<input id="bootstrap-code" type="password" autoComplete="off" value={setupCode} onChange={e=>setSetupCode(e.target.value)} placeholder="Leave blank after initial setup" className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+</div>
+<button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Sign In'}</button>
                 </div>
             )}
             </form>
             {activeTab === 'login' && (
                 <div className="mt-8 pt-6 border-t border-slate-100">
-                    <button className="w-full bg-white border border-slate-200 text-slate-600 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all text-sm flex items-center justify-center gap-3">
-                        <span className="w-5 h-5 flex items-center justify-center bg-white rounded-full"><GlobeIcon size={16} className="text-indigo-600"/></span> Sign in with Google
+                    <button disabled title="Google SSO has not been configured" className="w-full bg-white border border-slate-200 text-slate-400 py-3.5 rounded-xl font-bold cursor-not-allowed text-sm flex items-center justify-center gap-3">
+                        <span className="w-5 h-5 flex items-center justify-center bg-white rounded-full"><GlobeIcon size={16} className="text-indigo-600"/></span> Google SSO Not Configured
                     </button>
                 </div>
             )}
@@ -1450,10 +1447,12 @@ const AdminPanel = ({ users, setUsers }) => {
 
     const handleCreate = async (e) => {
         e.preventDefault();
-        const newUser = { id: `local-${Date.now()}`, name: newName, email: newEmail, role: 'Regular', status: 'offline' };
-        setUsers([...users, newUser]);
-        setNewName(''); setNewEmail(''); setNewPassword('');
-        alert("User Provisioned");
+        try {
+          const result = await provisionUser(newName, newEmail, newPassword);
+          setUsers(previous => [...previous, result.user]);
+          setNewName(''); setNewEmail(''); setNewPassword('');
+          alert('User created successfully');
+        } catch (error) { alert(error.message); }
     };
 
     const handleCreatePolicy = (e) => {
@@ -1465,8 +1464,7 @@ const AdminPanel = ({ users, setUsers }) => {
     };
 
     const handleResetPassword = (name) => {
-        const newPass = Math.random().toString(36).slice(-8).toUpperCase();
-        alert(`Password for ${name} reset to temporary key: ${newPass}`);
+        alert('Password resets are disabled until a verified reset flow is implemented.');
     };
 
     const handleBrandUpload = (key, e) => {
@@ -1791,13 +1789,93 @@ const AdminPanel = ({ users, setUsers }) => {
 };
 
 // --- MAIN APP ---
+
+// Backed by the API. Prototype administrative controls must not appear as operational.
+const SecureUserManagement = ({ users, setUsers }) => {
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const addUser = async e => {
+    e.preventDefault();
+    setFeedback('');
+    setBusy(true);
+    try {
+      const body = await provisionUser(form.name, form.email, form.password);
+      setUsers(current => [...current, body.user]);
+      setForm({ name: '', email: '', password: '' });
+      setFeedback('User account created.');
+    } catch (error) { setFeedback(error.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="p-6 md:p-12 max-w-5xl mx-auto space-y-8">
+      <h1 className="text-2xl font-bold">User Management</h1>
+      <p className="text-sm text-slate-600">This section uses the authenticated account directory. Only administrators can create accounts.</p>
+      <form onSubmit={addUser} className="grid gap-3 max-w-xl">
+        <label htmlFor="admin-name">Full name</label>
+        <input id="admin-name" required minLength={2} maxLength={120} className="border rounded-lg p-3" value={form.name} onChange={e => setForm({...form,name:e.target.value})}/>
+        <label htmlFor="admin-email">Email address</label>
+        <input id="admin-email" required type="email" className="border rounded-lg p-3" value={form.email} onChange={e => setForm({...form,email:e.target.value})}/>
+        <label htmlFor="admin-password">Temporary password (at least 14 characters)</label>
+        <input id="admin-password" required type="password" minLength={14} autoComplete="new-password" className="border rounded-lg p-3" value={form.password} onChange={e => setForm({...form,password:e.target.value})}/>
+        <button type="submit" disabled={busy} className="bg-indigo-600 text-white p-3 rounded-lg disabled:opacity-60">{busy?'Creating account...':'Create account'}</button>
+        {feedback && <p role="status" className="text-sm">{feedback}</p>}
+      </form>
+      <div className="overflow-auto">
+        <table className="min-w-full text-sm text-left"><thead><tr className="border-b"><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Role</th></tr></thead>
+          <tbody>{users.map(u => <tr key={u.id} className="border-b"><td className="p-3">{u.name}</td><td className="p-3">{u.email}</td><td className="p-3">{u.role}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
+
+
+const ChangeInitialPassword = ({ onComplete }) => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [repeatPassword, setRepeatPassword] = useState('');
+  const [setupCode, setSetupCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+    if (newPassword !== repeatPassword) {setError('New passwords must match');return;}
+    if (newPassword.length < 16 || newPassword === currentPassword) {setError('Use a different password with at least 16 characters');return;}
+    setBusy(true);
+    try {
+      await rotateInitialPassword(currentPassword,newPassword,setupCode);
+      onComplete();
+    } catch(e) {setError(e.message);}
+    finally {setBusy(false);}
+  }
+  return <div className="min-h-screen flex justify-center items-center bg-slate-100 p-4">
+    <form onSubmit={submit} className="bg-white rounded-2xl p-8 shadow max-w-md w-full grid gap-4">
+      <h1 className="font-bold text-2xl">Change administrator password</h1>
+      <p className="text-slate-600 text-sm">The initial admin password must be replaced before accessing NovaNexus. Your session will end after the password is changed.</p>
+      <label htmlFor="current-password">Current password</label>
+      <input id="current-password" className="border p-3 rounded" type="password" required value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}/>
+      <label htmlFor="setup-code-change">One-time installation setup code</label>
+      <input id="setup-code-change" className="border p-3 rounded" type="password" required value={setupCode} onChange={e=>setSetupCode(e.target.value)}/>
+      <label htmlFor="new-password">New password (16+ characters)</label>
+      <input id="new-password" className="border p-3 rounded" type="password" minLength={16} required value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
+      <label htmlFor="repeat-password">Confirm new password</label>
+      <input id="repeat-password" className="border p-3 rounded" type="password" minLength={16} required value={repeatPassword} onChange={e=>setRepeatPassword(e.target.value)}/>
+      {error && <p role="alert" className="text-red-700">{error}</p>}
+      <button disabled={busy} type="submit" className="bg-indigo-600 text-white p-3 rounded"> {busy?'Changing...':'Change password and sign in again'} </button>
+    </form>
+  </div>;
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('auth'); 
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [meetingRoom, setMeetingRoom] = useState('');
-  const [users, setUsers] = useState(MOCK_USERS);
+  const [users, setUsers] = useState([]);
+  const [authLoading, setAuthLoading] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
@@ -1806,17 +1884,40 @@ function App() {
     if (r) setMeetingRoom(r);
   }, []);
 
-  const startMeeting = (room) => { 
-      if (!room) return; 
-      setMeetingRoom(room); 
-      setView('meeting'); 
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await getSession();
+        if (active) { setUser(data.user); setView(data.user.must_change_password ? 'change-password' : 'dashboard'); }
+      } catch (error) {
+        console.error('Authentication service unavailable', error);
+      } finally {
+        if (active) setAuthLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchUsers()
+      .then(data => setUsers(data.users))
+      .catch(error => console.error(error));
+  }, [user]);
+
+  const startMeeting = (room) => {
+      window.alert('Real-time meetings are not available until the signaling and media infrastructure is deployed.');
   };
 
   const handleUpdateProfile = (updatedUser) => {
       setUser(updatedUser);
   };
 
-  const handleLogout = async () => { setView('auth'); setUser(null); }
+  const handleLogout = async () => {
+    try { await signOut(); }
+    finally { setView('auth'); setUser(null); setUsers([]); }
+  };
   
   // Clean handle end call to manage guest vs user redirection
   const handleMeetingEnd = () => {
@@ -1828,6 +1929,8 @@ function App() {
       }
   };
 
+  if (authLoading) return <div className="min-h-screen flex items-center justify-center" role="status">Checking your session...</div>;
+  if (view === 'change-password') return <ChangeInitialPassword onComplete={() => {setUser(null);setView('auth');}} />;
   if (view === 'auth') return <AuthScreen setUser={setUser} setView={setView} prefilledRoom={meetingRoom} />;
   if (view === 'meeting') return <VideoRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} />; 
 
@@ -1835,7 +1938,7 @@ function App() {
     // ... existing layout code ...
         <div className="h-screen w-full bg-[#f9fafb] flex font-sans text-slate-800 overflow-hidden selection:bg-indigo-100 selection:text-indigo-800 flex-col md:flex-row">
             {/* Profile Modal */}
-          {showProfile && (
+          {false && showProfile && (
               <ProfileSettingsModal 
                   user={user} 
                   onClose={() => setShowProfile(false)} 
@@ -1857,7 +1960,7 @@ function App() {
                 <NavItem icon={<LayoutGrid />} label="Overview" active={currentTab === 'dashboard'} onClick={() => setCurrentTab('dashboard')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<MessageCircle />} label="Chat" active={currentTab === 'chats'} onClick={() => setCurrentTab('chats')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
-                <NavItem icon={<Shield />} label="Admin" active={currentTab === 'admin'} onClick={() => setCurrentTab('admin')} collapsed={sidebarCollapsed} />
+                {user?.role === 'Admin' && <NavItem icon={<Shield />} label="Admin" active={currentTab === 'admin'} onClick={() => setCurrentTab('admin')} collapsed={sidebarCollapsed} />}
               </nav>
             </div>
             <div className="p-4 border-t border-slate-50">
@@ -1877,7 +1980,7 @@ function App() {
                 </div>
                 <div className="hidden md:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                 <div className="flex items-center gap-6">
-                    <div onClick={()=>setShowProfile(true)} className="flex items-center gap-3 bg-white pl-1.5 pr-4 py-1.5 rounded-full border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
+                    <div title="Profile editing is unavailable until server-side profile updates are implemented" className="flex items-center gap-3 bg-white pl-1.5 pr-4 py-1.5 rounded-full border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
                         <UserAvatar name={user?.name} src={user?.avatar} className="w-7 h-7"/>
                         <span className="text-[10px] font-black uppercase text-slate-700 group-hover:text-indigo-600 transition-colors hidden sm:block">{user?.name}</span>
                     </div>
@@ -1890,12 +1993,12 @@ function App() {
                         <div className="space-y-10">
                         <header>
                             <h1 className="text-3xl font-black text-slate-800 tracking-tight leading-tight mb-2">Welcome back, <span className="text-indigo-600">{user?.name?.split(' ')[0]}.</span></h1>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> System Operational</p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Authenticated workspace</p>
                         </header>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white cursor-pointer shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] flex flex-col justify-between h-64 group relative overflow-hidden" onClick={() => startMeeting("Nexus-"+Math.floor(Math.random()*10000))}>
+                            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white cursor-pointer shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] flex flex-col justify-between h-64 group relative overflow-hidden" onClick={() => startMeeting('unavailable')}>
                                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity"><Video size={140}/></div>
-                                <div className="relative z-10"><div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-all duration-500 shadow-inner backdrop-blur-md mb-4"><Plus size={24} strokeWidth={3}/></div><h3 className="font-black text-2xl tracking-tighter">Instant Hub</h3><p className="text-indigo-100 mt-2 text-[10px] uppercase font-bold tracking-widest opacity-80">Start HD Video Session</p></div>
+                                <div className="relative z-10"><div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-all duration-500 shadow-inner backdrop-blur-md mb-4"><Plus size={24} strokeWidth={3}/></div><h3 className="font-black text-2xl tracking-tighter">Video meetings unavailable</h3><p className="text-indigo-100 mt-2 text-[10px] uppercase font-bold tracking-widest opacity-80">Media service not deployed</p></div>
                             </div>
                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col justify-center h-64 relative overflow-hidden">
                                 <div className="relative z-10"><h3 className="font-black mb-6 text-slate-800 text-[10px] uppercase tracking-[0.3em] flex items-center gap-2"><LinkIcon size={14}/> Join Session</h3><div className="flex flex-col sm:flex-row gap-3"><input placeholder="Enter Room Key..." value={meetingRoom} onChange={e=>setMeetingRoom(e.target.value)} className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-[1.5rem] text-xs outline-none shadow-inner focus:ring-4 focus:ring-indigo-50 transition-all font-bold" /><button onClick={() => startMeeting(meetingRoom)} disabled={!meetingRoom} className="bg-slate-900 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black hover:scale-105 transition-all disabled:opacity-50">Connect</button></div></div>
@@ -1905,12 +2008,12 @@ function App() {
                         {/* Recent Activity Section */}
                         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                             <div className="p-8 border-b border-slate-50">
-                                <h3 className="font-bold text-slate-800 text-sm">Recent Activity</h3>
+                                <h3 className="font-bold text-slate-800 text-sm">Recent Activity</h3><p className="text-xs text-slate-500 mt-2">Activity reporting is not yet connected.</p>
                             </div>
                             <div className="p-2">
                                 <table className="w-full text-left">
                                     <tbody className="divide-y divide-slate-50">
-                                        {MOCK_ACTIVITIES.map(activity => (
+                                        {[].map(activity => (
                                             <tr key={activity.id} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-8 py-5">
                                                     <div className="flex items-center gap-4">
@@ -1938,7 +2041,7 @@ function App() {
                             </div>
                         </div>
 
-                        {/* Active Team Members Section - Box Layout */}
+                        {/* Team Directory Section - Box Layout */}
                         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                             <div className="p-8 border-b border-slate-50 flex justify-between items-center">
                                 <h3 className="font-bold text-slate-800 text-sm">Active Team Members</h3>
@@ -1990,9 +2093,9 @@ function App() {
                         </div>
                     </div>
                 )}
-                {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} />}
-                {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
-                {currentTab === 'admin' && <AdminPanel users={users} setUsers={setUsers} />}
+                {currentTab === 'chats' && <div className="p-12" role="status"><h2 className="font-bold text-xl">Messaging not yet available</h2><p>Secure message delivery and persistent storage must be deployed before enabling chat.</p></div>}
+                {currentTab === 'schedule' && <div className="p-12" role="status"><h2 className="font-bold text-xl">Scheduling not yet available</h2><p>The calendar service and persistent meeting records are not yet deployed.</p></div>}
+                {currentTab === 'admin' && (user?.role === 'Admin' ? <SecureUserManagement users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
             </div>
           </main>
           
@@ -2010,10 +2113,10 @@ function App() {
                   <Calendar size={24} />
                   <span className="text-[10px] font-bold">Plan</span>
               </button>
-              <button onClick={() => setCurrentTab('admin')} className={`flex flex-col items-center gap-1 ${currentTab === 'admin' ? 'text-indigo-600' : 'text-slate-400'}`}>
+              {user?.role === 'Admin' && <button onClick={() => setCurrentTab('admin')} className={`flex flex-col items-center gap-1 ${currentTab === 'admin' ? 'text-indigo-600' : 'text-slate-400'}`}>
                   <Shield size={24} />
                   <span className="text-[10px] font-bold">Admin</span>
-              </button>
+              </button>}
           </div>
         </div>
   );

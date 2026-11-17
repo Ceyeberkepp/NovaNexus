@@ -1,18 +1,28 @@
-# NovaNexus workspace import
+# NovaNexus import and modernization status
 
-This branch imports the original user-supplied single-file React UI as `src/App.jsx`, with Vite, React, Lucide and Tailwind CSS scaffolding.
+This repository began as a user-supplied single-file React workspace prototype.
+The import is now being modernized behind the **draft** production hardening PR.
 
-## Local commands
+## Implementation introduced on the hardening branch
+- Go API with PostgreSQL, Argon2id password hashing, HTTP-only sessions,
+  account role enforcement, and mandatory first-admin password rotation.
+- A strictly typed TypeScript browser API client. The original large React
+  interface remains JSX and needs a strict TypeScript migration and UI audit.
+- Docker image, Caddy TLS reverse proxy, PostgreSQL Compose stack,
+  and guarded Ubuntu/Debian install script.
+- CI build, authentication integration tests, container smoke tests,
+  CodeQL scans, Dependabot and proprietary policy documents.
 
-```bash
-npm install
-npm run dev
-npm run build
-```
+## What remains blocked
+- Real multi-party media signaling and TURN/STUN transport.
+- Persistent messaging, channels, scheduling, notifications and audits.
+- MCP protocol server, authenticated MCP tooling, and third-party integrations.
+- Application-level MFA, invitation/registration policy, password recovery.
+- Backup/restore drills, migration versioning, container image provenance,
+  firewall validation, and tested one-click installation on supported hosts.
+- Source privacy and enforceable GitHub branch protection must be set by a
+  repository owner. The repository is still public.
 
-## Not yet production-ready
-
-- `MOCK_*` arrays contain static sample users, meetings, policies, and audit events.
-- The login form currently creates a demo administrator without verifying a password; **do not expose this branch as a live authenticated service**.
-- Video participants and various messaging/calendar/admin actions are simulated or local-only. Real meeting signaling, secure authentication, authorization and backend persistence need implementation.
-- Review UI behavior and run a successful build before merging. The import preserves the supplied code rather than claiming these features are complete.
+Passing the API smoke test is **not** equivalent to production readiness.
+Do not deploy this app as a functioning collaboration system until all
+required release gates are verified.

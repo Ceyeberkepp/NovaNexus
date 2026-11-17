@@ -1,0 +1,46 @@
+name: NovaNexus container smoke test
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DB_PASSWORD: ci-only-database-password
+      BOOTSTRAP_SETUP_CODE: ci-only-setup-code-long-and-randomized-for-test
+      NOVANEXUS_DOMAIN: nexus.example.test
+      TLS_EMAIL: ci@example.test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check installer syntax and runtime manifest
+        run: |
+          bash -n scripts/install.sh
+          docker compose config --quiet
+          test -f Dockerfile
+          test -f Caddyfile
+      - name: Build non-root Go API image
+        run: docker compose build app
+      - name: Start PostgreSQL and Go API
+        run: docker compose up -d db app
+      - name: Verify container boot and internal health
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 45); do
+            if docker compose exec -T app wget -q -O - http://127.0.0.1:3000/api/health | grep -q '"ok"'; then
+              docker compose exec -T app wget -q -O - http://127.0.0.1:3000/ | grep -q 'NovaNexus'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --tail=100 app db
+          exit 1
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --tail=100 app db
+      - name: Stop containers
+        if: always()
+        run: docker compose down --remove-orphans
