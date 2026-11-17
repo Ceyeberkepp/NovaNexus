@@ -43,13 +43,13 @@ source /etc/os-release
 [[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || fail "Requires x86_64 or ARM64."
 command -v apt-get >/dev/null || fail "apt-get is required."
 if [[ -e "$ROOT_DIR" && ! -f "$ROOT_DIR/.env" ]]; then
-  fail "$ROOT_DIR exists without the expected configuration; it will not be overwritten."
+  fail "$ROOT_DIR already exists without a saved configuration. Refusing to overwrite unknown data."
 fi
 RESUME_INSTALL=0
 if [[ -f "$ROOT_DIR/.env" ]]; then
-  [[ -f "$ROOT_DIR/docker-compose.yml" && -f "$ROOT_DIR/Caddyfile" ]] || fail "Incomplete prior installation. Inspect $ROOT_DIR before retrying."
+  [[ -f "$ROOT_DIR/docker-compose.yml" && -f "$ROOT_DIR/Caddyfile" ]] || fail "Incomplete previous deployment."
   RESUME_INSTALL=1
-  log "Existing installation detected: resuming without resetting credentials."
+  log "Previous deployment found: resuming without replacing data."
 fi
 [[ "$REF" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]] || fail "Invalid source ref."
 
@@ -100,12 +100,13 @@ Architectures: $arch
 Signed-By: /etc/apt/keyrings/docker.asc
 DOCKER_REPOSITORY
   apt-get -o Acquire::Retries=2 update -qq || fail "Docker repository update failed. Check DNS and APT configuration."
-  # Do not silently remove existing container runtimes on a shared system.
-  if dpkg-query -W -f='${Status}' docker.io 2>/dev/null | grep -qx "install ok installed"; then
-    fail "Existing distro Docker Engine detected without Compose. Resolve package conflicts separately; installer will not replace a running container engine."
-  fi
-  if ! apt-get -y -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
-    fail "Official Docker packages could not be installed. Check package conflicts or Docker APT availability."
+  if dpkg-query -W -f='${Status}' docker.io 2>/dev/null | grep -qx 'install ok installed'; then
+    log "Existing Debian Docker Engine found; installing only Compose and Buildx plugins."
+    apt-get -y -qq install --no-install-recommends docker-compose-plugin docker-buildx-plugin ||
+      fail "Docker Compose plugin cannot be added safely to the existing Debian engine."
+  else
+    apt-get -y -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin ||
+      fail "Official Docker packages could not be installed. Check APT repository and package conflicts."
   fi
 fi
 systemctl enable --now docker
@@ -142,47 +143,14 @@ EOF
 else
   stored_address=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' .env | head -n 1)
   SETUP_CODE=$(sed -n 's/^BOOTSTRAP_SETUP_CODE=//p' .env | head -n 1)
-  [[ -n "$stored_address" && -n "$SETUP_CODE" ]] || fail "Existing .env is incomplete; refusing credential reset."
+  [[ -n "$stored_address" && -n "$SETUP_CODE" ]] || fail "Existing .env is incomplete; refusing credential rotation."
   NOVANEXUS_DOMAIN=$stored_address
   if valid_ipv4 "$NOVANEXUS_DOMAIN"; then TLS_MODE=internal; else TLS_MODE=public; fi
-  log "Reusing original address: https://$NOVANEXUS_DOMAIN"
+  log "Reusing prior HTTPS address: $NOVANEXUS_DOMAIN"
 fi
 chmod 600 .env
 if [[ "$TLS_MODE" == internal ]]; then
-  if ! grep -Eq '^[[:space:]]+tls internal[[:space:]]*
-fi
-log "Building Go API and React frontend and starting PostgreSQL + HTTPS"
-docker compose config --quiet
-docker compose build --pull app
-docker compose up -d --wait --wait-timeout 240
-log "Checking HTTPS certificate and application health"
-CURL_CA=()
-if [[ "$TLS_MODE" == internal ]]; then
-  CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
-  docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
-  chmod 644 "$CA_FILE"
-  CURL_CA=(--cacert "$CA_FILE")
-fi
-verified=false
-for attempt in $(seq 1 15); do
-  if curl --fail --silent --connect-timeout 4 --max-time 8 "${CURL_CA[@]}" "https://$NOVANEXUS_DOMAIN/api/health" 2>/dev/null | grep -q '"ok"'; then
-    verified=true; break
-  fi
-  sleep 2
-done
-if [[ "$verified" != true ]]; then
-  docker compose logs --tail=60 https app db >&2 || true
-  fail "HTTPS health verification failed; NOT marking installation complete."
-fi
-printf "\nNovaNexus HTTPS check passed: https://%s\n" "$NOVANEXUS_DOMAIN"
-if [[ "$TLS_MODE" == internal ]]; then
-  printf "Local TLS root certificate: %s\n" "$CA_FILE"
-  printf "Trust this CA on browser devices to avoid HTTPS warnings.\n"
-fi
-printf "Initial username: admin\nTemporary password: admin\nOne-time installation setup code: %s\n" "$SETUP_CODE"
-printf "You must change the admin password before the dashboard unlocks.\n"
-printf "Root-only deployment settings: %s/.env\n" "$ROOT_DIR"
- Caddyfile; then
+  if ! grep -Eq '^[[:space:]]+tls internal[[:space:]]*$' Caddyfile; then
     sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
   fi
 fi
