@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           base=http://127.0.0.1:3000
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/directory" | grep -q second@local.invalid
-          curl -fsS -b /tmp/nova-cookie2 -X PUT -H "Content-Type: application/json" -d '{"workspaceName":"Development Workspace","defaultMeetingLimit":25,"sessionMinutes":30}' "$base/api/admin/settings" | grep -q true
+          curl -fsS -b /tmp/nova-cookie2 -X PUT -H "Content-Type: application/json" -d '{"workspaceName":"Development Workspace","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":false,"waitingRoomMessage":"Wait for your host","aiEnabled":true}' "$base/api/admin/settings" | grep -q true
           curl -fsS -b /tmp/nova-cookie2 "$base/api/workspace/settings" | grep -q "Development Workspace"
           curl -fsS -b /tmp/nova-cookie2 -H "Content-Type: application/json" -d '{"name":"Test Group","description":"Integration"}' "$base/api/admin/groups" | grep -q id
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/groups" | grep -q "Test Group"
@@ -114,5 +114,20 @@ jobs:
           curl -fsS "$base/api/branding" | grep -q 'data:image/png;base64'
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/settings" | grep -q 'login_logo'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie -X PUT -H 'Content-Type: application/json' -d "$payload" "$base/api/admin/branding")" = "403"
+      - name: Verify Admin password reset and AI policy
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:3000
+          second_id=$(python3 -c 'import json;print(json.load(open("/tmp/nova-second.json"))["user"]["id"])')
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"userID\":$second_id}" "$base/api/admin/reset-password" > /tmp/nova-password-reset.json
+          python3 -c 'import json;v=json.load(open("/tmp/nova-password-reset.json"));assert len(v["temporaryPassword"])>=24 and v["mustChange"]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie "$base/api/auth/me")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"email":"second@local.invalid","password":"12345678"}' "$base/api/auth/login")" = "401"
+          temp_password=$(python3 -c 'import json;print(json.load(open("/tmp/nova-password-reset.json"))["temporaryPassword"])')
+          curl -fsS -H 'Content-Type: application/json' -d "{\"email\":\"second@local.invalid\",\"password\":\"$temp_password\"}" "$base/api/auth/login" | grep -q '"must_change_password":true'
+          curl -fsS -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d '{"workspaceName":"Development Workspace","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":true,"waitingRoomMessage":"Please wait","aiEnabled":false}' "$base/api/admin/settings" | grep -q true
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"hello"}]}' "$base/api/assistant/chat")" = "403"
+          curl -fsS -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d '{"workspaceName":"Development Workspace","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":false,"waitingRoomMessage":"Wait for your host","aiEnabled":true}' "$base/api/admin/settings" | grep -q true
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"hello"}]}' "$base/api/assistant/chat")" = "401"
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
