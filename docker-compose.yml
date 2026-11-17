@@ -30,6 +30,8 @@ services:
       TRUST_PROXY: "1"
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?Generate LiveKit key in installer}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?Generate LiveKit secret in installer}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
     expose: ["3000"]
     read_only: true
     tmpfs:
@@ -37,6 +39,14 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     networks: [backend]
+  ollama:
+    image: ollama/ollama:0.12.10
+    restart: unless-stopped
+    volumes:
+      - ollamadata:/root/.ollama
+    expose: ["11434"]
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
   livekit:
     image: livekit/livekit-server:v1.13.10
     restart: unless-stopped
@@ -71,5 +81,6 @@ volumes:
   pgdata:
   caddydata:
   caddyconfig:
+  ollamadata:
 networks:
   backend: {}
