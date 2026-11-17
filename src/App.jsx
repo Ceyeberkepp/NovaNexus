@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import MeetingRoom from './MeetingRoom';
 import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
 import { 
   Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
@@ -1914,7 +1915,13 @@ function App() {
   }, [user]);
 
   const startMeeting = (room) => {
-      window.alert('Real-time meetings are not available until the signaling and media infrastructure is deployed.');
+      const id = room && room !== 'unavailable' ? String(room) : `Nexus-${Date.now()}`;
+      if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id)) {
+        window.alert('Use a meeting ID containing 1–80 letters, digits, underscores or hyphens.');
+        return;
+      }
+      setMeetingRoom(id);
+      setView('meeting');
   };
 
   const handleUpdateProfile = (updatedUser) => {
@@ -1939,7 +1946,7 @@ function App() {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center" role="status">Checking your session...</div>;
   if (view === 'change-password') return <ChangeInitialPassword onComplete={() => {setUser(null);setView('auth');}} />;
   if (view === 'auth') return <AuthScreen setUser={setUser} setView={setView} prefilledRoom={meetingRoom} />;
-  if (view === 'meeting') return <VideoRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} />; 
+  if (view === 'meeting') return <MeetingRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} />; 
 
   return (
     // ... existing layout code ...
@@ -2005,7 +2012,7 @@ function App() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white cursor-pointer shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] flex flex-col justify-between h-64 group relative overflow-hidden" onClick={() => startMeeting('unavailable')}>
                                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity"><Video size={140}/></div>
-                                <div className="relative z-10"><div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-all duration-500 shadow-inner backdrop-blur-md mb-4"><Plus size={24} strokeWidth={3}/></div><h3 className="font-black text-2xl tracking-tighter">Video meetings unavailable</h3><p className="text-indigo-100 mt-2 text-[10px] uppercase font-bold tracking-widest opacity-80">Media service not deployed</p></div>
+                                <div className="relative z-10"><div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-all duration-500 shadow-inner backdrop-blur-md mb-4"><Plus size={24} strokeWidth={3}/></div><h3 className="font-black text-2xl tracking-tighter">Start Video Meeting</h3><p className="text-indigo-100 mt-2 text-[10px] uppercase font-bold tracking-widest opacity-80">Audio • Video • Screen sharing • Up to 1000 participants</p></div>
                             </div>
                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col justify-center h-64 relative overflow-hidden">
                                 <div className="relative z-10"><h3 className="font-black mb-6 text-slate-800 text-[10px] uppercase tracking-[0.3em] flex items-center gap-2"><LinkIcon size={14}/> Join Session</h3><div className="flex flex-col sm:flex-row gap-3"><input placeholder="Enter Room Key..." value={meetingRoom} onChange={e=>setMeetingRoom(e.target.value)} className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-[1.5rem] text-xs outline-none shadow-inner focus:ring-4 focus:ring-indigo-50 transition-all font-bold" /><button onClick={() => startMeeting(meetingRoom)} disabled={!meetingRoom} className="bg-slate-900 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black hover:scale-105 transition-all disabled:opacity-50">Connect</button></div></div>
