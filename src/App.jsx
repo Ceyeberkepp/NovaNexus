@@ -387,20 +387,24 @@ const MeetingDetailsModal = ({ onClose, onSave }) => {
 
 // --- SCHEDULE PANEL ---
 const SchedulePanel = ({ startMeeting }) => {
-    const [meetings, setMeetings] = useState(MOCK_MEETINGS);
+    const [meetings, setMeetings] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [showNewMenu, setShowNewMenu] = useState(false); 
     const [showMeetingDetails, setShowMeetingDetails] = useState(false); // State for Channel Meeting Modal
     const [newMeeting, setNewMeeting] = useState({ title: '', date: '', time: '', description: '' });
-    const [viewDate, setViewDate] = useState(new Date('2026-01-26')); 
+    const [viewDate, setViewDate] = useState(() => new Date()); 
     const [viewMode, setViewMode] = useState('week'); 
 
     const startHour = 8; 
     const endHour = 18; 
     const totalHours = endHour - startHour;
     const hourHeight = 80;
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-    const dates = [26, 27, 28, 29, 30]; 
+    const weekStart = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate());
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+    const visibleDates = Array.from({length: 5}, (_, i) => {
+      const date = new Date(weekStart); date.setDate(weekStart.getDate() + i);
+      return { day: date.toLocaleDateString(undefined, {weekday:'short'}), date:date.getDate(), dateStr:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`, index:i };
+    }); 
 
     const handleSchedule = (e) => {
         e.preventDefault();
@@ -439,9 +443,9 @@ const SchedulePanel = ({ startMeeting }) => {
 
     const getVisibleDays = () => {
         if (viewMode === 'day') {
-            return [{ day: 'Mon', date: 26, index: 0 }];
+            return visibleDates.filter(d => d.dateStr === `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2,'0')}-${String(viewDate.getDate()).padStart(2,'0')}`);
         }
-        return days.map((d, i) => ({ day: d, date: dates[i], index: i }));
+        return visibleDates;
     };
     
     const visibleDays = getVisibleDays();
@@ -455,9 +459,9 @@ const SchedulePanel = ({ startMeeting }) => {
                 <div className="flex items-center gap-6">
                     <h1 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Calendar</h1>
                     <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200">
-                        <button className="p-1 hover:text-indigo-600 transition-colors"><ChevronLeft size={20}/></button>
-                        <span className="text-xs font-bold px-4 text-slate-700">January 26 - 30, 2026</span>
-                        <button className="p-1 hover:text-indigo-600 transition-colors"><ChevronRight size={20}/></button>
+                        <button onClick={() => setViewDate(d => new Date(d.getFullYear(),d.getMonth(),d.getDate()-(viewMode==='day'?1:7)))} className="p-1 hover:text-indigo-600 transition-colors"><ChevronLeft size={20}/></button>
+                        <span className="text-xs font-bold px-4 text-slate-700">{visibleDates[0].dateStr} – {visibleDates[4].dateStr}</span>
+                        <button onClick={() => setViewDate(d => new Date(d.getFullYear(),d.getMonth(),d.getDate()+(viewMode==='day'?1:7)))} className="p-1 hover:text-indigo-600 transition-colors"><ChevronRight size={20}/></button>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -514,9 +518,9 @@ const SchedulePanel = ({ startMeeting }) => {
                 </div>
                 <div className="flex-1 flex overflow-x-auto">
                     {visibleDays.map((dayItem) => {
-                        const dateStr = `2026-01-${dayItem.date}`;
+                        const dateStr = dayItem.dateStr;
                         const dayEvents = meetings.filter(m => m.date === dateStr);
-                        const isToday = dayItem.index === 0; 
+                        const isToday = dateStr === new Date().toLocaleDateString('en-CA'); 
                         
                         return (
                             <div key={dayItem.day} className="flex-1 min-w-[160px] border-r border-slate-100 relative bg-white">
@@ -1143,11 +1147,11 @@ const Messenger = ({ startMeeting, users }) => {
     const [selectedChat, setSelectedChat] = useState(null);
     const [messages, setMessages] = useState({}); 
     const [inputText, setInputText] = useState('');
-    const [groups, setGroups] = useState(MOCK_GROUPS);
+    const [groups, setGroups] = useState([]);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedUsersForGroup, setSelectedUsersForGroup] = useState([]);
-    const [favorites, setFavorites] = useState(['1', '2']); 
+    const [favorites, setFavorites] = useState([]); 
     const [showChatSettings, setShowChatSettings] = useState(false);
     const [showChatMenu, setShowChatMenu] = useState(false); 
     const [showPeopleMenu, setShowPeopleMenu] = useState(false); 
@@ -2085,8 +2089,8 @@ function App() {
                         </div>
                     </div>
                 )}
-                {currentTab === 'chats' && <div className="p-12" role="status"><h2 className="font-bold text-xl">Messaging not yet available</h2><p>Secure message delivery and persistent storage must be deployed before enabling chat.</p></div>}
-                {currentTab === 'schedule' && <div className="p-12" role="status"><h2 className="font-bold text-xl">Scheduling not yet available</h2><p>The calendar service and persistent meeting records are not yet deployed.</p></div>}
+                {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} />}
+                {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
                 {currentTab === 'admin' && (user?.role === 'Admin' ? <SecureUserManagement users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
             </div>
           </main>
