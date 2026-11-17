@@ -17,6 +17,12 @@ The original visual design is retained and gradually connected to working APIs:
 
 **Important:** These integrations remain development-preview functionality. Real cross-browser media, firewall/NAT, optional large meetings, and security audit must pass before a production deployment.
 
+### Calls workspace — real accounts and call history
+
+The **Calls** sidebar button opens a Teams-inspired calling workspace, retaining NovaNexus's purple branding. The left panel searches only active accounts stored in the workspace database; select a real member and press **Call** or **Video**. The right panel reads real PostgreSQL call records with **All, Missed, Incoming, Outgoing and Voicemail** filters, chronological sorting, and repeat-call shortcuts. Answer/end timestamps and session end actions support call duration reporting for completed calls.
+
+**No sample users, fabricated presence or simulated call history are used in this Calls workspace.** When no calls have occurred, the list is empty. The Voicemail filter explicitly says the service is not configured rather than inventing voicemails. Call forwarding likewise needs a future routing service. Browser microphone preference is saved to the user's chat/video preferences.
+
 ### Meeting numbers, direct calls and settings
 
 - **Meeting numbers:** NovaNexus reserves unique random eight-digit numbers in PostgreSQL. Join links have the form \`https://10.5.5.51/12345678\` on local IP installs. The number is a sample; the app generates a new one when starting each meeting.
