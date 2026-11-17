@@ -18,12 +18,14 @@ export default function AdminConsole({users,setUsers}){
  const [form,setForm]=useState({name:'',email:'',password:''});
  const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000'});
  const [logs,setLogs]=useState([]);
+ const [groups,setGroups]=useState([]);
+ const [groupForm,setGroupForm]=useState({name:'',description:''});
  useEffect(()=>{refresh();},[]);
  async function refresh(){
   setNotice('');
   try{
-   const [directory,config,audit]=await Promise.all([adminRequest('directory'),adminRequest('settings'),adminRequest('logs')]);
-   setUsers(directory.users);setSettings({...settings,...config.settings});setLogs(audit.events);
+   const [directory,config,audit,groupData]=await Promise.all([adminRequest('directory'),adminRequest('settings'),adminRequest('logs'),adminRequest('groups')]);
+   setUsers(directory.users);setSettings({...settings,...config.settings});setLogs(audit.events);setGroups(groupData.groups);
   }catch(e){setNotice(e.message);}
  }
  async function execute(fn){
@@ -71,7 +73,18 @@ export default function AdminConsole({users,setUsers}){
        </tbody></table>
       </div>
     </div>}
-    {tab==='groups'&&<div className="rounded-2xl bg-white border p-7"><h2 className="font-bold mb-2">Groups and policy management</h2><p className="text-sm text-slate-600">Group membership and custom permission policies are not enabled yet. No demo policies are displayed or saved as if they were active. User roles can be managed under Users.</p></div>}
+    {tab==='groups'&&<div className="grid lg:grid-cols-[300px_1fr] gap-6">
+     <form className="rounded-2xl bg-white border p-6 space-y-4 h-fit" onSubmit={async e=>{e.preventDefault();await execute(()=>adminRequest('groups',{method:'POST',body:JSON.stringify(groupForm)}));setGroupForm({name:'',description:''});}}>
+       <h2 className="font-bold">Create Group</h2>
+       <label className="block text-sm">Group name<input className={input} value={groupForm.name} minLength={2} maxLength={100} required onChange={e=>setGroupForm({...groupForm,name:e.target.value})}/></label>
+       <label className="block text-sm">Description<textarea className={input} maxLength={500} value={groupForm.description} onChange={e=>setGroupForm({...groupForm,description:e.target.value})}/></label>
+       <button disabled={loading} className={btn}>Create group</button>
+       <p className="text-xs text-slate-500">Group membership is stored in PostgreSQL. Custom permissions and group messaging require separate authorization before they can be enabled.</p>
+     </form>
+     <div className="space-y-4">{groups.map(g=><GroupEditor key={g.id} group={g} users={users} busy={loading} execute={execute}/>)}
+      {groups.length===0&&<div className="rounded-2xl bg-white p-7 border text-sm text-slate-500">No groups have been created yet.</div>}
+     </div>
+   </div>}
     {tab==='security'&&<div className="grid md:grid-cols-2 gap-6">
        <div className="rounded-2xl bg-white border p-7"><h2 className="font-bold mb-4">Access policies</h2><p className="text-sm">Password minimum: <strong>8 characters</strong></p><p className="text-sm mt-3">Session lifetime: <strong>8 hours</strong></p><p className="text-sm mt-3">Administrator session revocation on role change: <strong>Enabled</strong></p><p className="text-sm text-slate-500 mt-5">MFA enforcement and configurable session timeout aren't implemented. Those controls are intentionally disabled, not falsely shown as enabled.</p></div>
        <div className="rounded-2xl bg-white border p-7"><h2 className="font-bold mb-4">Security activity</h2><p className="text-sm">{logs.length} recent administrative events.</p><button className={btn+' mt-4'} onClick={()=>setTab('logs')}>View audit log</button></div>
@@ -100,4 +113,24 @@ function UserRow({user,busy,update}){
   <td className="p-3">{user.active===false?'Disabled':'Enabled'}</td>
   <td className="p-3 flex gap-2 flex-wrap"><button disabled={busy} className="text-indigo-700 font-semibold" onClick={()=>update(user,{name,role})}>Save</button><button disabled={busy} className={user.active===false?'text-green-700 font-semibold':'text-rose-700 font-semibold'} onClick={()=>{if(window.confirm((user.active===false?'Enable ':'Disable ')+user.email+'?'))update(user,{active:user.active===false})}}>{user.active===false?'Enable':'Disable'}</button></td>
  </tr>;
+}
+
+function GroupEditor({group,users,busy,execute}){
+ const [name,setName]=useState(group.name);
+ const [description,setDescription]=useState(group.description);
+ const [userId,setUserId]=useState('');
+ useEffect(()=>{setName(group.name);setDescription(group.description)},[group.name,group.description]);
+ async function mutate(body,method='PATCH'){await execute(()=>adminRequest('groups',{method,body:JSON.stringify({...body,groupID:group.id})}));}
+ return <div className="rounded-2xl bg-white border p-6 space-y-4">
+   <div className="flex justify-between gap-4"><h3 className="font-bold">{group.name}</h3><button disabled={busy} className="text-sm font-semibold text-rose-700" onClick={()=>{if(window.confirm('Delete group '+group.name+'?'))mutate({},'DELETE')}}>Delete</button></div>
+   <div className="grid md:grid-cols-2 gap-3">
+     <label className="text-sm">Name<input className={input} minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label>
+     <label className="text-sm">Description<input className={input} maxLength={500} value={description} onChange={e=>setDescription(e.target.value)}/></label>
+   </div>
+   <button disabled={busy} className="text-indigo-700 font-semibold text-sm" onClick={()=>mutate({name,description})}>Save group details</button>
+   <div className="border-t pt-4"><h4 className="font-semibold text-sm mb-3">Members ({group.members.length})</h4>
+     <div className="flex flex-wrap gap-2 mb-4">{group.members.map(id=>{const u=users.find(x=>x.id===id);return <div key={id} className="flex items-center rounded-full bg-slate-100 px-3 py-2 text-xs">{u?.name||('User '+id)}<button className="ml-2 text-rose-700 font-bold" aria-label={'Remove '+(u?.name||id)} disabled={busy} onClick={()=>mutate({userID:id,action:'remove_member'})}>×</button></div>})}</div>
+     <div className="flex flex-wrap gap-2"><select className={input+' max-w-xs'} aria-label="Select member" value={userId} onChange={e=>setUserId(e.target.value)}><option value="">Select a user</option>{users.filter(u=>u.active!==false&&!group.members.includes(u.id)).map(u=><option value={u.id} key={u.id}>{u.name} ({u.email})</option>)}</select><button className={btn} disabled={busy||!userId} onClick={async()=>{await mutate({userID:Number(userId),action:'add_member'});setUserId('')}}>Add member</button></div>
+   </div>
+ </div>;
 }
