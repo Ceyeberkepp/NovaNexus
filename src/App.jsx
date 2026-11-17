@@ -1792,6 +1792,54 @@ const AdminPanel = ({ users, setUsers }) => {
 };
 
 // --- MAIN APP ---
+
+// Backed by the API. Prototype administrative controls must not appear as operational.
+const SecureUserManagement = ({ users, setUsers }) => {
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const addUser = async e => {
+    e.preventDefault();
+    setFeedback('');
+    setBusy(true);
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form)
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Unable to provision user');
+      setUsers(current => [...current, body.user]);
+      setForm({ name: '', email: '', password: '' });
+      setFeedback('User account created.');
+    } catch (error) { setFeedback(error.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="p-6 md:p-12 max-w-5xl mx-auto space-y-8">
+      <h1 className="text-2xl font-bold">User Management</h1>
+      <p className="text-sm text-slate-600">This section uses the authenticated account directory. Only administrators can create accounts.</p>
+      <form onSubmit={addUser} className="grid gap-3 max-w-xl">
+        <label htmlFor="admin-name">Full name</label>
+        <input id="admin-name" required minLength={2} maxLength={120} className="border rounded-lg p-3" value={form.name} onChange={e => setForm({...form,name:e.target.value})}/>
+        <label htmlFor="admin-email">Email address</label>
+        <input id="admin-email" required type="email" className="border rounded-lg p-3" value={form.email} onChange={e => setForm({...form,email:e.target.value})}/>
+        <label htmlFor="admin-password">Temporary password (at least 14 characters)</label>
+        <input id="admin-password" required type="password" minLength={14} autoComplete="new-password" className="border rounded-lg p-3" value={form.password} onChange={e => setForm({...form,password:e.target.value})}/>
+        <button type="submit" disabled={busy} className="bg-indigo-600 text-white p-3 rounded-lg disabled:opacity-60">{busy?'Creating account...':'Create account'}</button>
+        {feedback && <p role="status" className="text-sm">{feedback}</p>}
+      </form>
+      <div className="overflow-auto">
+        <table className="min-w-full text-sm text-left"><thead><tr className="border-b"><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Role</th></tr></thead>
+          <tbody>{users.map(u => <tr key={u.id} className="border-b"><td className="p-3">{u.name}</td><td className="p-3">{u.email}</td><td className="p-3">{u.role}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('auth'); 
@@ -1865,7 +1913,7 @@ function App() {
     // ... existing layout code ...
         <div className="h-screen w-full bg-[#f9fafb] flex font-sans text-slate-800 overflow-hidden selection:bg-indigo-100 selection:text-indigo-800 flex-col md:flex-row">
             {/* Profile Modal */}
-          {showProfile && (
+          {false && showProfile && (
               <ProfileSettingsModal 
                   user={user} 
                   onClose={() => setShowProfile(false)} 
@@ -1907,7 +1955,7 @@ function App() {
                 </div>
                 <div className="hidden md:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                 <div className="flex items-center gap-6">
-                    <div onClick={()=>setShowProfile(true)} className="flex items-center gap-3 bg-white pl-1.5 pr-4 py-1.5 rounded-full border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
+                    <div title="Profile editing is unavailable until server-side profile updates are implemented" className="flex items-center gap-3 bg-white pl-1.5 pr-4 py-1.5 rounded-full border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
                         <UserAvatar name={user?.name} src={user?.avatar} className="w-7 h-7"/>
                         <span className="text-[10px] font-black uppercase text-slate-700 group-hover:text-indigo-600 transition-colors hidden sm:block">{user?.name}</span>
                     </div>
@@ -1923,9 +1971,9 @@ function App() {
                             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Authenticated workspace</p>
                         </header>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white cursor-pointer shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] flex flex-col justify-between h-64 group relative overflow-hidden" onClick={() => startMeeting("Nexus-"+Math.floor(Math.random()*10000))}>
+                            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white cursor-pointer shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] flex flex-col justify-between h-64 group relative overflow-hidden" onClick={() => startMeeting('unavailable')}>
                                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity"><Video size={140}/></div>
-                                <div className="relative z-10"><div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-all duration-500 shadow-inner backdrop-blur-md mb-4"><Plus size={24} strokeWidth={3}/></div><h3 className="font-black text-2xl tracking-tighter">Instant Hub</h3><p className="text-indigo-100 mt-2 text-[10px] uppercase font-bold tracking-widest opacity-80">Start HD Video Session</p></div>
+                                <div className="relative z-10"><div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-all duration-500 shadow-inner backdrop-blur-md mb-4"><Plus size={24} strokeWidth={3}/></div><h3 className="font-black text-2xl tracking-tighter">Video meetings unavailable</h3><p className="text-indigo-100 mt-2 text-[10px] uppercase font-bold tracking-widest opacity-80">Media service not deployed</p></div>
                             </div>
                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col justify-center h-64 relative overflow-hidden">
                                 <div className="relative z-10"><h3 className="font-black mb-6 text-slate-800 text-[10px] uppercase tracking-[0.3em] flex items-center gap-2"><LinkIcon size={14}/> Join Session</h3><div className="flex flex-col sm:flex-row gap-3"><input placeholder="Enter Room Key..." value={meetingRoom} onChange={e=>setMeetingRoom(e.target.value)} className="flex-1 px-6 py-4 bg-slate-50 border-none rounded-[1.5rem] text-xs outline-none shadow-inner focus:ring-4 focus:ring-indigo-50 transition-all font-bold" /><button onClick={() => startMeeting(meetingRoom)} disabled={!meetingRoom} className="bg-slate-900 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black hover:scale-105 transition-all disabled:opacity-50">Connect</button></div></div>
@@ -1935,7 +1983,7 @@ function App() {
                         {/* Recent Activity Section */}
                         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                             <div className="p-8 border-b border-slate-50">
-                                <h3 className="font-bold text-slate-800 text-sm">Recent Activity</h3>
+                                <h3 className="font-bold text-slate-800 text-sm">Recent Activity</h3><p className="text-xs text-slate-500 mt-2">Activity reporting is not yet connected.</p>
                             </div>
                             <div className="p-2">
                                 <table className="w-full text-left">
@@ -1968,7 +2016,7 @@ function App() {
                             </div>
                         </div>
 
-                        {/* Active Team Members Section - Box Layout */}
+                        {/* Team Directory Section - Box Layout */}
                         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                             <div className="p-8 border-b border-slate-50 flex justify-between items-center">
                                 <h3 className="font-bold text-slate-800 text-sm">Active Team Members</h3>
@@ -2022,7 +2070,7 @@ function App() {
                 )}
                 {currentTab === 'chats' && <div className="p-12" role="status"><h2 className="font-bold text-xl">Messaging not yet available</h2><p>Secure message delivery and persistent storage must be deployed before enabling chat.</p></div>}
                 {currentTab === 'schedule' && <div className="p-12" role="status"><h2 className="font-bold text-xl">Scheduling not yet available</h2><p>The calendar service and persistent meeting records are not yet deployed.</p></div>}
-                {currentTab === 'admin' && (user?.role === 'Admin' ? <AdminPanel users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
+                {currentTab === 'admin' && (user?.role === 'Admin' ? <SecureUserManagement users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
             </div>
           </main>
           
