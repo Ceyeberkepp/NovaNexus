@@ -3,7 +3,7 @@ import MeetingRoom from './MeetingRoom';
 import CallNotifications from './CallNotifications';
 import AdminConsole from './AdminConsole';
 import WorkspaceAssistant from './WorkspaceAssistant';
-import ChatPreferences,{readChatPreferences,chatThemes} from './ChatPreferences';
+import ChatPreferences,{readChatPreferences,chatThemes,chatBackgrounds} from './ChatPreferences';
 import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
 import { 
   Sparkles, Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
@@ -1396,7 +1396,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                 </div>
                 
                 {/* Chat Area */}
-                <div className="flex-1 flex flex-col relative" style={{backgroundColor:chatThemes[prefs.theme]||chatThemes.Quartz}}>
+                <div className="flex-1 flex flex-col relative" style={{backgroundColor:chatThemes[prefs.theme]||chatThemes.Quartz,...(chatBackgrounds[prefs.background]||chatBackgrounds.solid)}}>
                     {selectedChat ? (
                         <>
                              {/* Chat Header */}
