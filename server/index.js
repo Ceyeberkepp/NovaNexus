@@ -52,7 +52,7 @@ async function authenticate(req,res,next) {
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return res.status(401).json({error:"Sign in required"});
     const result=await pool.query("SELECT u.id,u.name,u.email,u.role,u.must_change_password FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW() AND u.active=TRUE",[hashToken(token)]);
     if (!result.rowCount) return res.status(401).json({error:"Session expired"});
-    req.user=result.rows[0]; if(req.user.must_change_password && req.path !== '/auth/change-password') return res.status(403).json({error:'Password change required',must_change_password:true}); next();
+    req.user=result.rows[0]; if(req.user.must_change_password && !req.path.endsWith('/auth/change-password')) return res.status(403).json({error:'Password change required',must_change_password:true}); next();
   } catch(e) { next(e); }
 }
 const loginLimiter=rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:"draft-7",legacyHeaders:false,message:{error:"Too many attempts. Try again later."}});
