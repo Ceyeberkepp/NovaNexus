@@ -45,6 +45,18 @@ export default function AdminConsole({users,setUsers}){
   e.preventDefault();
   await execute(()=>adminRequest('settings',{method:'PUT',body:JSON.stringify({workspaceName:settings.workspace_name,defaultMeetingLimit:Number(settings.default_meeting_limit),sessionMinutes:Number(settings.session_minutes)})}));
  }
+ async function uploadBranding(e,key){
+  const file=e.target.files?.[0];if(!file)return;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>128*1024){
+   setNotice('Choose a PNG, JPEG or WebP image no larger than 128 KB.');return;
+  }
+  const reader=new FileReader();
+  reader.onload=()=>execute(()=>adminRequest('branding',{method:'PUT',body:JSON.stringify({key,data:String(reader.result||'')})}));
+  reader.onerror=()=>setNotice('Could not read image file.');
+  reader.readAsDataURL(file);
+ }
+ async function clearBranding(key){await execute(()=>adminRequest('branding',{method:'PUT',body:JSON.stringify({key,data:''})}));}
+
  function exportLogs(){
   const rows=[['Time','Event','Actor','Target'],...logs.map(l=>[l.created_at,l.event,l.actor,l.target])];
   const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
@@ -92,7 +104,7 @@ export default function AdminConsole({users,setUsers}){
     {(tab==='meetings'||tab==='branding')&&<form className="max-w-xl rounded-2xl bg-white border p-7 space-y-5" onSubmit={saveSettings}>
       <h2 className="font-bold">{tab==='meetings'?'Meeting defaults':'Workspace branding'}</h2>
       {tab==='meetings'?<><label className="block text-sm">Default maximum participants (1–1000)<input className={input} type="number" min="1" max="1000" required value={settings.default_meeting_limit} onChange={e=>setSettings({...settings,default_meeting_limit:e.target.value})}/></label><p className="text-sm text-slate-500">This is the server-configured room limit. It does not certify 1000 simultaneous video connections. Guest waiting-room enforcement, recording and host moderation require additional service integration.</p></>:
-        <><label className="block text-sm">Workspace name<input className={input} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label><p className="text-sm text-slate-500">Workspace name is saved in PostgreSQL. Logo uploads and global theme assets are not yet served from persistent storage and are not presented as active controls.</p></>}
+        <><label className="block text-sm">Workspace name<input className={input} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label><div className="grid gap-4">{[['site_logo','Site Logo'],['login_logo','Login Screen Logo'],['favicon','Favicon']].map(([key,label])=><div key={key} className="rounded-xl border p-4 space-y-3"><div className="font-semibold text-sm">{label}</div>{settings[key]&&<img src={settings[key]} alt={label} className="max-h-20 max-w-40 object-contain"/>}<label className="block text-xs font-semibold text-indigo-700 cursor-pointer">Upload image (PNG, JPEG, WebP, max 128 KB)<input className="block mt-2 text-xs" accept="image/png,image/jpeg,image/webp" type="file" onChange={e=>uploadBranding(e,key)}/></label>{settings[key]&&<button type="button" className="text-xs text-rose-700 font-semibold" onClick={()=>clearBranding(key)}>Remove image</button>}</div>)}</div><p className="text-xs text-slate-500">The uploaded assets are validated and saved on the server. Login and browser branding update after refresh.</p></>}
       <button className={btn+' flex items-center gap-2'} disabled={loading}><Save size={16}/> Save changes</button>
     </form>}
     {tab==='logs'&&<div className="rounded-2xl bg-white border overflow-hidden">
