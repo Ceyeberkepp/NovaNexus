@@ -1,5 +1,6 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {Phone,PhoneIncoming,PhoneOutgoing,PhoneMissed,Video,Search,Users,SlidersHorizontal,Headphones,ChevronDown,History,PhoneCall,RefreshCw,Voicemail,PhoneForwarded,X} from 'lucide-react';
+import {readChatPreferences} from './ChatPreferences';
 
 const filters=['All','Missed','Incoming','Outgoing','Voicemail'];
 async function loadCalls(){
@@ -53,7 +54,7 @@ export default function CallsPanel({user,users}){
  const [loading,setLoading]=useState(false);
  const [sort,setSort]=useState('newest');
  const [deviceNames,setDeviceNames]=useState([]);
- const [device,setDevice]=useState('');
+ const [device,setDevice]=useState(()=>readChatPreferences(user?.id||0).callAudioDevice||'');
  const refresh=useCallback(async(silent=false)=>{
   if(!silent)setLoading(true);
   try{setCalls(await loadCalls());setError('')}catch(e){setError(e.message||'Unable to load call history')}finally{if(!silent)setLoading(false)}
@@ -89,7 +90,7 @@ export default function CallsPanel({user,users}){
     {showContacts&&<div className="min-h-0 overflow-y-auto p-3"><h2 className="mb-3 px-2 text-xs font-bold uppercase text-slate-500">Workspace contacts ({contacts.length})</h2>{matches.map(c=><button key={c.id} className={'flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-indigo-50 '+(String(selected)===String(c.id)?'bg-indigo-50':'')} onClick={()=>setSelected(String(c.id))}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">{initials(c.name)}</span><span className="min-w-0"><span className="block truncate text-xs font-semibold">{c.name}</span><span className="block truncate text-[11px] text-slate-400">{c.email}</span></span></button>)}{contacts.length===0&&<p className="px-2 text-xs text-slate-500">No other active members in your workspace.</p>}</div>}
     <div className="mt-auto border-t border-slate-100 p-4 text-[11px] text-slate-600">
       <div className="mb-2 flex items-center gap-2"><PhoneForwarded size={15}/> Call forwarding: Not configured</div>
-      <label className="flex items-center gap-2"><Headphones size={15}/><select aria-label="Microphone preference" value={device} onChange={e=>setDevice(e.target.value)} className="min-w-0 flex-1 border-0 bg-transparent text-[11px]"><option value="">System microphone</option>{deviceNames.map((d,i)=><option value={d.deviceId} key={d.deviceId||i}>{d.label||'Microphone '+(i+1)}</option>)}</select></label>
+      <label className="flex items-center gap-2"><Headphones size={15}/><select aria-label="Microphone preference" value={device} onChange={e=>{const value=e.target.value;setDevice(value);try{localStorage.setItem('novanexus.chat.'+user.id,JSON.stringify({...readChatPreferences(user.id),callAudioDevice:value}));}catch{setError('Could not save microphone preference.');}}} className="min-w-0 flex-1 border-0 bg-transparent text-[11px]"><option value="">System microphone</option>{deviceNames.map((d,i)=><option value={d.deviceId} key={d.deviceId||i}>{d.label||'Microphone '+(i+1)}</option>)}</select></label>
       <p className="mt-2 text-[10px] text-slate-400">Choose call devices in Video & Audio Settings before joining.</p>
     </div>
    </aside>
