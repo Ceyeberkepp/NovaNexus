@@ -119,7 +119,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
   const [password, setPassword] = useState('');
   const [branding,setBranding] = useState({workspace_name:'Nexus Workspace'});
   useEffect(()=>{let live=true;fetch('/api/branding').then(r=>r.json()).then(d=>{if(live&&d.branding){setBranding(d.branding);document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});return()=>{live=false;};},[]);
-  const [activeTab, setActiveTab] = useState(prefilledRoom ? 'join' : 'login'); 
+  const [activeTab, setActiveTab] = useState('login'); 
   const [guestName, setGuestName] = useState('');
   const [meetingId, setMeetingId] = useState(prefilledRoom || '');
   const [loading, setLoading] = useState(false);
@@ -127,7 +127,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
   // Update state when props change (for deep linking)
   useEffect(() => {
     if (prefilledRoom) {
-      setActiveTab('join');
+      setActiveTab('login');
       setMeetingId(prefilledRoom);
     }
   }, [prefilledRoom]);
@@ -144,7 +144,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
     try {
       const result = await signIn(email, password);
       setUser(result.user);
-      setView(result.user.must_change_password ? 'change-password' : 'dashboard');
+      setView(result.user.must_change_password ? 'change-password' : (prefilledRoom ? 'meeting' : 'dashboard'));
     } catch (error) {
       setAuthError(error.message || 'Sign-in failed');
     } finally {
@@ -174,6 +174,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
             <button onClick={() => setActiveTab('login')} className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'login' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}>Member Login</button>
         </div>
 
+        {prefilledRoom && <div className="mx-7 mt-4 rounded-xl bg-indigo-50 p-3 text-xs text-indigo-800">Sign in to join meeting <strong>{prefilledRoom}</strong>. Guest access is not yet enabled.</div>}
         {authError && <p role="alert" className="mx-8 mt-4 text-sm text-red-700">{authError}</p>}
               {/* Form Section */}
         <div className="p-8 pt-8">
@@ -1907,7 +1908,7 @@ function App() {
     (async () => {
       try {
         const data = await getSession();
-        if (active) { setUser(data.user); setView(data.user.must_change_password ? 'change-password' : 'dashboard'); }
+        if (active) { setUser(data.user); const requestedRoom = new URLSearchParams(window.location.search).get('room');setView(data.user.must_change_password ? 'change-password' : (requestedRoom ? 'meeting' : 'dashboard')); }
       } catch (error) {
         console.error('Authentication service unavailable', error);
       } finally {
