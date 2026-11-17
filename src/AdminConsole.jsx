@@ -136,12 +136,18 @@ export default function AdminConsole({users,setUsers}){
 function UserRow({user,busy,update}){
  const [name,setName]=useState(user.name);
  const [role,setRole]=useState(user.role);
+ const [editing,setEditing]=useState(false);
  useEffect(()=>{setName(user.name);setRole(user.role)},[user.name,user.role]);
- return <tr className="border-b align-middle">
-  <td className="p-3"><input aria-label={'Name '+user.email} className={input} value={name} onChange={e=>setName(e.target.value)}/><div className="text-xs text-slate-500 mt-1">{user.email}</div></td>
-  <td className="p-3"><select aria-label={'Role '+user.email} className={input} value={role} onChange={e=>setRole(e.target.value)}><option>Regular</option><option>Admin</option></select></td>
-  <td className="p-3">{user.active===false?'Disabled':'Enabled'}</td>
-  <td className="p-3 flex gap-2 flex-wrap"><button disabled={busy} className="text-indigo-700 font-semibold" onClick={()=>update(user,{name,role})}>Save</button><button disabled={busy} className={user.active===false?'text-green-700 font-semibold':'text-rose-700 font-semibold'} onClick={()=>{if(window.confirm((user.active===false?'Enable ':'Disable ')+user.email+'?'))update(user,{active:user.active===false})}}>{user.active===false?'Enable':'Disable'}</button></td>
+ async function save(){await update(user,{name,role});setEditing(false);}
+ const initials=String(user.name||'U').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();
+ return <tr className="border-b border-slate-50 align-middle hover:bg-indigo-50/20">
+  <td className="p-5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{initials}</span><div>{editing?<input aria-label={'Name '+user.email} className={input} minLength={2} maxLength={120} value={name} onChange={e=>setName(e.target.value)}/>:<div className="text-xs font-bold text-slate-800">{user.name}</div>}<div className="mt-1 text-[10px] text-slate-400">{user.email}</div></div></div></td>
+  <td className="p-5">{editing?<select aria-label={'Role '+user.email} className={input} value={role} onChange={e=>setRole(e.target.value)}><option>Regular</option><option>Admin</option></select>:<span className={'rounded-lg px-3 py-1.5 text-[9px] font-black uppercase '+(user.role==='Admin'?'bg-purple-50 text-purple-600':'bg-slate-100 text-slate-500')}>{user.role}</span>}</td>
+  <td className="p-5"><span className={'text-[10px] font-bold '+(user.active===false?'text-rose-600':'text-green-600')}>{user.active===false?'Disabled':'Enabled'}</span></td>
+  <td className="p-5"><div className="flex flex-wrap gap-3">
+   {editing?<><button disabled={busy||name.trim().length<2} className="text-xs font-black text-indigo-600" onClick={save}>Save</button><button className="text-xs text-slate-500" onClick={()=>{setEditing(false);setName(user.name);setRole(user.role)}}>Cancel</button></>:<button className="text-xs font-black text-indigo-600" disabled={busy} onClick={()=>setEditing(true)} aria-label={'Edit '+user.name}><Edit2 size={16}/></button>}
+   <button disabled={busy} className={'text-xs font-bold '+(user.active===false?'text-green-700':'text-rose-600')} onClick={()=>{if(window.confirm((user.active===false?'Enable ':'Disable ')+user.email+'?'))update(user,{active:user.active===false})}}>{user.active===false?'Enable':'Disable'}</button>
+  </div></td>
  </tr>;
 }
 
