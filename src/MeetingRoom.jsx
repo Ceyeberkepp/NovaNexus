@@ -19,7 +19,7 @@ export default function MeetingRoom({roomId,user,onEnd}) {
       return;
     }
     if(!Number.isInteger(maxParticipants)||maxParticipants<1||maxParticipants>workspaceLimit){
-      setError('Meeting capacity must be between 1 and the administrator's configured limit.');
+      setError("Meeting capacity must be between 1 and the administrator's configured limit.");
       return;
     }
     setLoading(true);setError('');
