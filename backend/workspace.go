@@ -34,6 +34,22 @@ func (s *Server) messagesAPI(w http.ResponseWriter, r *http.Request) {
  respond(w,201,map[string]any{"message":map[string]any{"id":id,"sender":u.ID,"text":strings.TrimSpace(c.Text),"created_at":when}})
 }
 
+func (s *Server) recentMessagesAPI(w http.ResponseWriter,r *http.Request){
+ u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
+ if u.MustChange{fail(w,403,"Password change required");return}
+ if r.Method!="GET"{fail(w,405,"Method not allowed");return}
+ rows,e:=s.db.Query(r.Context(),`SELECT CASE WHEN sender_id=$1 THEN recipient_id ELSE sender_id END AS peer,MAX(created_at) AS last_activity FROM direct_messages WHERE sender_id=$1 OR recipient_id=$1 GROUP BY 1 ORDER BY last_activity DESC LIMIT 500`,u.ID)
+ if e!=nil{fail(w,500,"Recent activity unavailable");return}
+ defer rows.Close()
+ items:=make([]map[string]any,0)
+ for rows.Next(){var peer int64;var last time.Time
+  if rows.Scan(&peer,&last)!=nil{fail(w,500,"Recent activity unavailable");return}
+  items=append(items,map[string]any{"peer":peer,"last":last})
+ }
+ if rows.Err()!=nil{fail(w,500,"Recent activity unavailable");return}
+ respond(w,200,map[string]any{"recent":items})
+}
+
 func (s *Server) calendarAPI(w http.ResponseWriter,r *http.Request){
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
  if u.MustChange{fail(w,403,"Password change required");return}
