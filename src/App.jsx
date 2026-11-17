@@ -1830,7 +1830,6 @@ const ChangeInitialPassword = ({ onComplete }) => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
-  const [setupCode, setSetupCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   async function submit(event) {
