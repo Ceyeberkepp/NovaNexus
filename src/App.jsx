@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut } from './auth-client';
 import { 
   Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
   Link as LinkIcon, Monitor, Lock, AlertTriangle, Mic, MicOff, Camera, 
@@ -137,14 +138,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
     }
     setLoading(true);
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, setupCode })
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Sign-in failed');
+      const result = await signIn(email, password, setupCode);
       setUser(result.user);
       setView(result.user.must_change_password ? 'change-password' : 'dashboard');
     } catch (error) {
@@ -1454,9 +1448,7 @@ const AdminPanel = ({ users, setUsers }) => {
     const handleCreate = async (e) => {
         e.preventDefault();
         try {
-          const response = await fetch('/api/users', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, email: newEmail, password: newPassword }) });
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'Unable to create user');
+          const result = await provisionUser(newName, newEmail, newPassword);
           setUsers(previous => [...previous, result.user]);
           setNewName(''); setNewEmail(''); setNewPassword('');
           alert('User created successfully');
@@ -1808,14 +1800,7 @@ const SecureUserManagement = ({ users, setUsers }) => {
     setFeedback('');
     setBusy(true);
     try {
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Unable to provision user');
+      const body = await provisionUser(form.name, form.email, form.password);
       setUsers(current => [...current, body.user]);
       setForm({ name: '', email: '', password: '' });
       setFeedback('User account created.');
@@ -1860,12 +1845,7 @@ const ChangeInitialPassword = ({ onComplete }) => {
     if (newPassword.length < 16 || newPassword === currentPassword) {setError('Use a different password with at least 16 characters');return;}
     setBusy(true);
     try {
-      const response = await fetch('/api/auth/change-password', {
-        method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({currentPassword,newPassword,setupCode})
-      });
-      const result = await response.json();
-      if(!response.ok) throw new Error(result.error || 'Unable to change password');
+      await rotateInitialPassword(currentPassword,newPassword,setupCode);
       onComplete();
     } catch(e) {setError(e.message);}
     finally {setBusy(false);}
@@ -1908,11 +1888,8 @@ function App() {
     let active = true;
     (async () => {
       try {
-        const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
-        if (response.ok) {
-          const data = await response.json();
-          if (active) { setUser(data.user); setView(data.user.must_change_password ? 'change-password' : 'dashboard'); }
-        }
+        const data = await getSession();
+        if (active) { setUser(data.user); setView(data.user.must_change_password ? 'change-password' : 'dashboard'); }
       } catch (error) {
         console.error('Authentication service unavailable', error);
       } finally {
@@ -1924,8 +1901,7 @@ function App() {
 
   useEffect(() => {
     if (!user) return;
-    fetch('/api/users', { credentials: 'same-origin' })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('Unable to load directory')))
+    fetchUsers()
       .then(data => setUsers(data.users))
       .catch(error => console.error(error));
   }, [user]);
@@ -1939,7 +1915,7 @@ function App() {
   };
 
   const handleLogout = async () => {
-    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' }); }
+    try { await signOut(); }
     finally { setView('auth'); setUser(null); setUsers([]); }
   };
   
