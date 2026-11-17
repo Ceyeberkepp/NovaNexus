@@ -1946,7 +1946,7 @@ function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [meetingRoom, setMeetingRoom] = useState(()=>/^\/[0-9]{8}\/?$/.test(window.location.pathname)?window.location.pathname.replaceAll('/',''):'');
-  const [meetingOptions,setMeetingOptions]=useState({autoJoin:false,audioOnly:false});
+  const [meetingOptions,setMeetingOptions]=useState({autoJoin:false,audioOnly:false,callId:null});
   const [users, setUsers] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
@@ -1998,7 +1998,7 @@ function App() {
           id=data.room;
         }catch(error){window.alert(error.message||'Unable to create meeting');return;}
       }
-      setMeetingOptions({autoJoin:!!options.autoJoin,audioOnly:!!options.audioOnly});
+      setMeetingOptions({autoJoin:!!options.autoJoin,audioOnly:!!options.audioOnly,callId:options.callId||null});
       setMeetingRoom(id);
       window.history.pushState({},'', '/'+id);
       setView('meeting');
@@ -2015,8 +2015,11 @@ function App() {
   
   // Clean handle end call to manage guest vs user redirection
   const handleMeetingEnd = () => {
+      if(meetingOptions.callId){
+        fetch('/api/calls',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'end',callId:meetingOptions.callId})}).catch(()=>{});
+      }
       window.history.replaceState({},'','/');
-      setMeetingOptions({autoJoin:false,audioOnly:false});
+      setMeetingOptions({autoJoin:false,audioOnly:false,callId:null});
       if (user?.isGuest) {
           setUser(null);
           setView('auth');
