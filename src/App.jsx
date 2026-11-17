@@ -116,6 +116,8 @@ const NavItem = ({ icon, label, active, onClick, collapsed }) => (
 const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
   const [email, setEmail] = useState(''); 
   const [password, setPassword] = useState('');
+  const [branding,setBranding] = useState({workspace_name:'Nexus Workspace'});
+  useEffect(()=>{let live=true;fetch('/api/branding').then(r=>r.json()).then(d=>{if(live&&d.branding){setBranding(d.branding);document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});return()=>{live=false;};},[]);
   const [activeTab, setActiveTab] = useState(prefilledRoom ? 'join' : 'login'); 
   const [guestName, setGuestName] = useState('');
   const [meetingId, setMeetingId] = useState(prefilledRoom || '');
@@ -159,9 +161,9 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
         {/* Branding Header */}
         <div className="pt-10 pb-6 text-center">
             <div className="bg-indigo-600 w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-indigo-200">
-                <Command size={32} className="text-white"/>
+                {branding.login_logo?<img src={branding.login_logo} alt="Workspace login logo" className="h-full w-full object-contain rounded-2xl"/>:<Command size={32} className="text-white"/>}
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Nexus Workspace</h1>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">{branding.workspace_name||"Nexus Workspace"}</h1>
             <p className="text-slate-500 text-sm font-medium">Connect, Collaborate, Create.</p>
         </div>
 
@@ -1886,7 +1888,8 @@ function App() {
   const [users, setUsers] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
-  useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.settings?.workspace_name){setWorkspaceName(d.settings.workspace_name);document.title=d.settings.workspace_name;}}).catch(()=>{});},[user,currentTab]);
+  const [siteLogo,setSiteLogo] = useState('');
+  useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/branding',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.branding){setWorkspaceName(d.branding.workspace_name||'NovaNexus Workspace');setSiteLogo(d.branding.site_logo||'');document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});},[user,currentTab]);
   const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
@@ -1970,7 +1973,7 @@ function App() {
             </button>
             <div className="pt-8">
               <div className={`flex items-center px-6 pb-12 overflow-hidden`}>
-                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-2xl shadow-lg shadow-indigo-200 shrink-0"><Command className="text-white" size={18} /></div>
+                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-2xl shadow-lg shadow-indigo-200 shrink-0">{siteLogo?<img src={siteLogo} alt="Site Logo" className="h-7 w-7 object-contain rounded-xl"/>:<Command className="text-white" size={18} />}</div>
                 {!sidebarCollapsed && <span className="ml-3 font-black text-lg tracking-tighter text-slate-900 truncate" title={workspaceName}>{workspaceName}</span>}
               </div>
               <nav className="px-3 space-y-1">
