@@ -84,7 +84,7 @@ The development installer provisions the requested first-login credentials:
 
 - **Username:** `admin`
 - **Temporary password:** unique random password displayed by the installer (no setup code)
-- **First-login requirement:** change the temporary password before the workspace dashboard becomes available
+- **First-login requirement:** change the temporary password (minimum 8 characters) before the workspace dashboard becomes available
 
 The known default credentials must **not** provide unrestricted access. Administrator recovery, MFA, and broader account security still require review before public deployment.
 
