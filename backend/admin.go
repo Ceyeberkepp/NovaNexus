@@ -67,10 +67,10 @@ func (s *Server) adminSettingsAPI(w http.ResponseWriter,r *http.Request){
   respond(w,200,map[string]any{"settings":settings});return
  }
  if r.Method!="PUT"{fail(w,405,"Method not allowed");return}
- var c struct{WorkspaceName string;DefaultMeetingLimit int;SessionMinutes int}
- if asJSON(r,&c)!=nil||len(strings.TrimSpace(c.WorkspaceName))<2||len(c.WorkspaceName)>80||c.DefaultMeetingLimit<1||c.DefaultMeetingLimit>1000||c.SessionMinutes<5||c.SessionMinutes>480 {fail(w,400,"Workspace name (2–80), meeting limit (1–1000), and session timeout (5–480 min) required");return}
+ var c struct{WorkspaceName string;DefaultMeetingLimit int;SessionMinutes int;WaitingRoomEnabled bool;WaitingRoomMessage string;AIEnabled bool}
+ if asJSON(r,&c)!=nil||len(strings.TrimSpace(c.WorkspaceName))<2||len(c.WorkspaceName)>80||c.DefaultMeetingLimit<1||c.DefaultMeetingLimit>1000||c.SessionMinutes<5||c.SessionMinutes>480||len(c.WaitingRoomMessage)>500 {fail(w,400,"Workspace name (2–80), meeting limit (1–1000), and session timeout (5–480 min) required");return}
  tx,e:=s.db.Begin(r.Context());if e!=nil{fail(w,500,"Database unavailable");return};defer tx.Rollback(r.Context())
- for k,v:=range map[string]string{"workspace_name":strings.TrimSpace(c.WorkspaceName),"default_meeting_limit":strconv.Itoa(c.DefaultMeetingLimit),"session_minutes":strconv.Itoa(c.SessionMinutes)}{
+ for k,v:=range map[string]string{"workspace_name":strings.TrimSpace(c.WorkspaceName),"default_meeting_limit":strconv.Itoa(c.DefaultMeetingLimit),"session_minutes":strconv.Itoa(c.SessionMinutes),"waiting_room_enabled":strconv.FormatBool(c.WaitingRoomEnabled),"waiting_room_message":strings.TrimSpace(c.WaitingRoomMessage),"ai_enabled":strconv.FormatBool(c.AIEnabled)}{
   if _,e=tx.Exec(r.Context(),"INSERT INTO app_settings(name,value) VALUES($1,$2) ON CONFLICT(name) DO UPDATE SET value=EXCLUDED.value",k,v);e!=nil{fail(w,500,"Settings update failed");return}
  }
  if e=tx.Commit(r.Context());e!=nil{fail(w,500,"Settings update failed");return}
@@ -95,8 +95,8 @@ func (s *Server) workspaceSettingsAPI(w http.ResponseWriter,r *http.Request){
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
  if u.MustChange{fail(w,403,"Password change required");return}
  if r.Method!="GET"{fail(w,405,"Method not allowed");return}
- settings:=map[string]string{"workspace_name":"NovaNexus Workspace","default_meeting_limit":"1000","session_minutes":"480"}
- rows,e:=s.db.Query(r.Context(),"SELECT name,value FROM app_settings WHERE name IN ('workspace_name','default_meeting_limit','session_minutes')")
+ settings:=map[string]string{"workspace_name":"NovaNexus Workspace","default_meeting_limit":"1000","session_minutes":"480","waiting_room_enabled":"false","waiting_room_message":"Please wait for your host to admit you.","ai_enabled":"true"}
+ rows,e:=s.db.Query(r.Context(),"SELECT name,value FROM app_settings WHERE name IN ('workspace_name','default_meeting_limit','session_minutes','waiting_room_enabled','waiting_room_message','ai_enabled')")
  if e!=nil{fail(w,500,"Settings unavailable");return}
  defer rows.Close()
  for rows.Next(){var name,value string;if rows.Scan(&name,&value)==nil{settings[name]=value}}
