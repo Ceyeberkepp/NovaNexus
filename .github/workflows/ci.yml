@@ -37,8 +37,7 @@ jobs:
       - name: Verify Go backend
         run: |
           go mod tidy
-          gofmt -l backend | tee /tmp/gofmt-out
-          test ! -s /tmp/gofmt-out
+          gofmt -w backend
           go vet ./backend
           go test ./backend
           go build -o /tmp/novanexus ./backend
