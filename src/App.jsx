@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut } from './auth-client';
+import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
 import { 
   Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
   Link as LinkIcon, Monitor, Lock, AlertTriangle, Mic, MicOff, Camera, 
@@ -388,6 +388,8 @@ const MeetingDetailsModal = ({ onClose, onSave }) => {
 // --- SCHEDULE PANEL ---
 const SchedulePanel = ({ startMeeting }) => {
     const [meetings, setMeetings] = useState([]);
+    const [calendarError, setCalendarError] = useState("");
+    useEffect(() => { let live=true; getCalendarEvents().then(data=>{if(live)setMeetings(data.events);}).catch(e=>{if(live)setCalendarError(e.message);}); return ()=>{live=false;}; }, []);
     const [showModal, setShowModal] = useState(false);
     const [showNewMenu, setShowNewMenu] = useState(false); 
     const [showMeetingDetails, setShowMeetingDetails] = useState(false); // State for Channel Meeting Modal
@@ -406,21 +408,17 @@ const SchedulePanel = ({ startMeeting }) => {
       return { day: date.toLocaleDateString(undefined, {weekday:'short'}), date:date.getDate(), dateStr:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`, index:i };
     }); 
 
-    const handleSchedule = (e) => {
+    const handleSchedule = async (e) => {
         e.preventDefault();
-        const meeting = {
-            id: Date.now(),
-            title: newMeeting.title,
-            date: newMeeting.date,
-            time: newMeeting.time,
-            duration: 60,
-            attendees: [],
-            link: `Nexus-${Math.floor(Math.random() * 10000)}`,
-            type: 'meeting'
-        };
-        setMeetings([...meetings, meeting]);
-        setShowModal(false);
-        setNewMeeting({ title: '', date: '', time: '', description: '' });
+        setCalendarError("");
+        try {
+          const saved = await postCalendarEvent({title:newMeeting.title,date:newMeeting.date,time:newMeeting.time,duration:60});
+          setMeetings(previous => [...previous, saved.event]);
+          const [year,month,day] = saved.event.date.split("-").map(Number);
+          setViewDate(new Date(year,month-1,day));
+          setShowModal(false);
+          setNewMeeting({title:"",date:"",time:"",description:""});
+        } catch(err) {setCalendarError(err.message || "Could not save event");}
     };
     
     const handleChannelMeetingSave = () => {
@@ -452,6 +450,7 @@ const SchedulePanel = ({ startMeeting }) => {
 
     return (
         <div className="flex flex-col h-full bg-white text-slate-600">
+             {calendarError && <div role="alert" className="p-3 bg-red-50 text-red-700 text-sm">{calendarError}</div>}
              {/* Meeting Details Modal */}
              {showMeetingDetails && <MeetingDetailsModal onClose={() => setShowMeetingDetails(false)} onSave={handleChannelMeetingSave} />}
 
@@ -520,7 +519,7 @@ const SchedulePanel = ({ startMeeting }) => {
                     {visibleDays.map((dayItem) => {
                         const dateStr = dayItem.dateStr;
                         const dayEvents = meetings.filter(m => m.date === dateStr);
-                        const isToday = dateStr === new Date().toLocaleDateString('en-CA'); 
+                        const now=new Date(); const isToday = dateStr === `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; 
                         
                         return (
                             <div key={dayItem.day} className="flex-1 min-w-[160px] border-r border-slate-100 relative bg-white">
@@ -1141,11 +1140,18 @@ const VideoRoom = ({ roomId, user, onEnd }) => {
 };
 
 // --- ADMIN CONTROL ---
-const Messenger = ({ startMeeting, users }) => {
+const Messenger = ({ startMeeting, users, currentUser }) => {
     // ... existing Messenger code ...
     // Note: Re-pasting the Messenger component to ensure it's not lost if user copies this block
     const [selectedChat, setSelectedChat] = useState(null);
-    const [messages, setMessages] = useState({}); 
+    const [messages, setMessages] = useState({});
+    const [chatError, setChatError] = useState("");
+    useEffect(()=>{
+      if (!selectedChat || selectedChat.members) return;
+      let live=true;
+      getMessages(Number(selectedChat.id)).then(data=>{if(live)setMessages(previous=>({...previous,[selectedChat.id]:data.messages.map(m=>({id:m.id,text:m.text,sender:m.sender===Number(currentUser?.id)?"me":String(m.sender),time:new Date(m.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}))}));}).catch(e=>{if(live)setChatError(e.message);});
+      return ()=>{live=false;};
+    },[selectedChat,currentUser?.id]);
     const [inputText, setInputText] = useState('');
     const [groups, setGroups] = useState([]);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -1168,13 +1174,17 @@ const Messenger = ({ startMeeting, users }) => {
         setSectionState(prev => ({ ...prev, [section]: !prev[section] }));
     };
 
-    const sendMessage = () => {
-        if (!inputText.trim() || !selectedChat) return;
-        const newMsg = { text: inputText, sender: 'me', time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
-        setMessages(prev => ({ ...prev, [selectedChat.id]: [...(prev[selectedChat.id] || []), newMsg] }));
-        setInputText('');
+    const sendMessage = async () => {
+      if(!inputText.trim() || !selectedChat) return;
+      if(selectedChat.members){setChatError("Group messaging is not yet available");return;}
+      setChatError("");
+      try {
+        const result=await postMessage(Number(selectedChat.id),inputText.trim());
+        setMessages(previous=>({...previous,[selectedChat.id]:[...(previous[selectedChat.id]||[]),{id:result.message.id,text:result.message.text,sender:"me",time:new Date(result.message.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}]}));
+        setInputText("");
+      } catch(e){setChatError(e.message||"Message not sent");}
     };
-
+    
     const handleCreateGroup = () => {
         if(!newGroupName || selectedUsersForGroup.length === 0) return;
         const newGroup = { 
@@ -1220,6 +1230,7 @@ const Messenger = ({ startMeeting, users }) => {
     return (
         <div className="h-full flex flex-col relative bg-white">
             {showChatSettings && <ChatSettingsModal onClose={() => setShowChatSettings(false)} />}
+            {chatError && <div role="alert" className="p-3 text-sm bg-red-50 text-red-700">{chatError}</div>}
             
             {/* Create Group Modal */}
             {showCreateGroup && (
@@ -2089,7 +2100,7 @@ function App() {
                         </div>
                     </div>
                 )}
-                {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} />}
+                {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} currentUser={user} />}
                 {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
                 {currentTab === 'admin' && (user?.role === 'Admin' ? <SecureUserManagement users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
             </div>
