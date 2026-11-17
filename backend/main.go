@@ -140,6 +140,7 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/admin/branding":s.adminBrandingAPI(w,r)
  case "/api/health":if e:=s.db.Ping(r.Context());e!=nil{fail(w,503,"Database unavailable")}else{respond(w,200,map[string]any{"status":"ok"})}
  case "/api/meetings/token":s.meetingTokenAPI(w,r)
+ case "/api/messages/recent":s.recentMessagesAPI(w,r)
  case "/api/messages":s.messagesAPI(w,r)
  case "/api/calendar":s.calendarAPI(w,r)
  case "/api/auth/login":if r.Method=="POST"{s.login(w,r)}else{fail(w,405,"Method not allowed")}
