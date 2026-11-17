@@ -21,55 +21,10 @@ import {
   ChevronDown, Megaphone, Radio, Tv, MapPin, AlignLeft, Type, Repeat, List, CornerUpLeft, CornerUpRight, Bold, Italic, Underline
 } from 'lucide-react';
 
-// --- MOCK DATA ---
-const MOCK_USERS = [
-    { id: '1', name: 'Alice Chen', email: 'alice@nexus.corp', role: 'Regular', status: 'online', jobTitle: 'Product Designer' },
-    { id: '2', name: 'Marcus Solis', email: 'marcus@nexus.corp', role: 'Admin', status: 'busy', jobTitle: 'CTO' },
-    { id: '3', name: 'Elena Voronova', email: 'elena@nexus.corp', role: 'Regular', status: 'online', jobTitle: 'Frontend Lead' },
-    { id: '4', name: 'David Okafor', email: 'david@nexus.corp', role: 'Regular', status: 'offline', jobTitle: 'Marketing' },
-    { id: '5', name: 'Sarah Connor', email: 'sarah@nexus.corp', role: 'Regular', status: 'online', jobTitle: 'Security Ops' },
-];
-
-const MOCK_GROUPS = [
-    { id: 'g1', name: 'Product Team', members: ['1', '2', '3'], type: 'Team' },
-    { id: 'g2', name: 'Lunch Plans', members: ['1', '4'], type: 'Group' },
-    { id: 'g3', name: 'Engineering', members: ['2', '3', '4'], type: 'Team' },
-    { id: 'g4', name: 'Gaming Club', members: ['1', '5'], type: 'Group' }
-];
-
-const MOCK_ACTIVITIES = [
-    { id: 1, type: 'meeting', title: 'Product Design Sync', time: '2 hours ago', user: 'Alice Chen', icon: <Video size={16}/>, color: 'bg-indigo-100 text-indigo-600' },
-    { id: 2, type: 'upload', title: 'Q4 Financial Report.pdf', time: '4 hours ago', user: 'Marcus Solis', icon: <FileText size={16}/>, color: 'bg-orange-100 text-orange-600' },
-    { id: 3, type: 'message', title: 'Team Announcement', time: '5 hours ago', user: 'Sarah Connor', icon: <MessageSquare size={16}/>, color: 'bg-green-100 text-green-600' },
-];
-
-const MOCK_POLICIES = [
-    { id: 1, name: 'Identity Admins', description: 'Full instance orchestration, including attribute management.', members: 3, color: 'indigo' },
-    { id: 2, name: 'General Staff', description: 'Standard access to meetings, calendar and messaging.', members: 142, color: 'slate' },
-];
-
-const MOCK_MEETINGS = [
-    { id: 1, title: 'Q1 Roadmap Review', date: '2026-01-26', time: '10:00', duration: 60, attendees: ['Alice', 'Marcus'], link: 'Nexus-8832', type: 'meeting' },
-    { id: 2, title: 'Design Huddle', date: '2026-01-28', time: '14:00', duration: 90, attendees: ['Alice', 'Elena'], link: 'Nexus-9921', type: 'work' },
-    { id: 3, title: 'Team Sync', date: '2026-01-26', time: '09:00', duration: 30, attendees: ['All'], link: 'Nexus-1122', type: 'meeting' },
-    { id: 4, title: 'Client Call', date: '2026-01-27', time: '11:00', duration: 45, attendees: ['David'], link: 'Nexus-3344', type: 'external' },
-    { id: 5, title: 'Project Kickoff', date: '2026-01-29', time: '13:00', duration: 60, attendees: ['Sarah', 'David'], link: 'Nexus-5566', type: 'meeting' },
-    { id: 6, title: 'Lunch Break', date: '2026-01-26', time: '12:00', duration: 60, attendees: [], link: '', type: 'personal' },
-    { id: 7, title: 'Lunch Break', date: '2026-01-27', time: '12:00', duration: 60, attendees: [], link: '', type: 'personal' },
-    { id: 8, title: 'Lunch Break', date: '2026-01-28', time: '12:00', duration: 60, attendees: [], link: '', type: 'personal' },
-    { id: 9, title: 'Lunch Break', date: '2026-01-29', time: '12:00', duration: 60, attendees: [], link: '', type: 'personal' },
-    { id: 10, title: 'Lunch Break', date: '2026-01-30', time: '12:00', duration: 60, attendees: [], link: '', type: 'personal' },
-];
-
-const MOCK_LOGS = [
-    { id: 101, event: 'System Update v2.4.0', type: 'System', user: 'System', time: '10 mins ago', status: 'Success' },
-    { id: 102, event: 'New Policy "Intern Access" Created', type: 'Admin', user: 'Marcus Solis', time: '1 hour ago', status: 'Success' },
-    { id: 103, event: 'Failed Login Attempt', type: 'Security', user: 'Unknown (192.168.1.45)', time: '2 hours ago', status: 'Warning' },
-    { id: 104, event: 'Meeting "Q1 Review" Created', type: 'User', user: 'Alice Chen', time: '3 hours ago', status: 'Success' },
-    { id: 105, event: 'Password Reset Requested', type: 'Security', user: 'David Okafor', time: '5 hours ago', status: 'Success' },
-    { id: 106, event: 'Branding Assets Updated', type: 'Admin', user: 'Marcus Solis', time: '1 day ago', status: 'Success' },
-    { id: 107, event: 'API Rate Limit Exceeded', type: 'System', user: 'Service Bot', time: '1 day ago', status: 'Error' },
-];
+// Legacy prototype components retain empty collections for compatibility.
+// Live account directories, policy groups, meetings and audit records load from APIs.
+const MOCK_POLICIES = [];
+const MOCK_LOGS = [];
 
 // --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
@@ -843,12 +798,9 @@ const ChatSettingsModal = ({ onClose }) => {
 // --- VIDEO ROOM (IMMERSIVE) ---
 const VideoRoom = ({ roomId, user, onEnd }) => {
     // ... existing VideoRoom code ...
-    // Simulated remote participants for a better demo experience
+    // No simulated participants. Actual conferences use LiveKit's authenticated roster.
     const [participants, setParticipants] = useState([
-        { id: 'local', name: user?.name || 'You', isLocal: true, stream: null },
-        { id: 'p1', name: 'Alice Chen', role: 'Designer', isLocal: false }, 
-        { id: 'p2', name: 'Marcus Solis', role: 'CTO', isLocal: false },
-        { id: 'p3', name: 'David Okafor', role: 'Marketing', isLocal: false }
+        { id: 'local', name: user?.name || 'You', isLocal: true, stream: null }
     ]);
     const [localStream, setLocalStream] = useState(null);
     const [screenStream, setScreenStream] = useState(null);
