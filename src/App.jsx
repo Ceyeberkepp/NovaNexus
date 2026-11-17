@@ -1396,7 +1396,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                 </div>
                 
                 {/* Chat Area */}
-                <div className="flex-1 flex flex-col relative" style={{backgroundColor:chatThemes[prefs.theme]||chatThemes.Quartz,...(chatBackgrounds[prefs.background]||chatBackgrounds.solid)}}>
+                <div className="flex-1 flex flex-col relative" style={{backgroundColor:chatThemes[prefs.theme]||chatThemes.Quartz,backgroundImage:(chatBackgrounds[prefs.background]||chatBackgrounds.solid).backgroundImage,backgroundSize:(chatBackgrounds[prefs.background]||chatBackgrounds.solid).backgroundSize||"auto"}}>
                     {selectedChat ? (
                         <>
                              {/* Chat Header */}
