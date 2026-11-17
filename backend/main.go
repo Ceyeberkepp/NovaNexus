@@ -84,7 +84,7 @@ func (s *Server) changePassword(w http.ResponseWriter,r *http.Request) {
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
  if s.limited(r,u.Email){fail(w,429,"Too many attempts");return}
  var c struct {CurrentPassword,NewPassword string}
- if asJSON(r,&c)!=nil||len(c.NewPassword)<16||len(c.NewPassword)>1024||c.NewPassword==c.CurrentPassword||c.NewPassword=="admin" {fail(w,400,"Choose a different password with at least 16 characters");return}
+ if asJSON(r,&c)!=nil||len(c.NewPassword)<8||len(c.NewPassword)>1024||c.NewPassword==c.CurrentPassword||c.NewPassword=="admin" {fail(w,400,"Choose a different password with at least 8 characters");return}
  var stored string
  if e:=s.db.QueryRow(r.Context(),"SELECT password_hash FROM users WHERE id=$1",u.ID).Scan(&stored);e!=nil||!verifyPassword(c.CurrentPassword,stored) {fail(w,401,"Current password incorrect");return}
  tx,e:=s.db.Begin(r.Context());if e!=nil{fail(w,500,"Database unavailable");return};defer tx.Rollback(r.Context())
@@ -108,7 +108,7 @@ func (s *Server) users(w http.ResponseWriter,r *http.Request) {
  }
  if u.Role!="Admin"{fail(w,403,"Administrator required");return}
  var c struct {Name,Email,Password string}
- if asJSON(r,&c)!=nil||len(strings.TrimSpace(c.Name))<2||len(c.Name)>120||len(c.Email)>254||!strings.Contains(c.Email,"@")||len(c.Password)<14||len(c.Password)>1024 {fail(w,400,"Valid name, email and password (14+ characters) required");return}
+ if asJSON(r,&c)!=nil||len(strings.TrimSpace(c.Name))<2||len(c.Name)>120||len(c.Email)>254||!strings.Contains(c.Email,"@")||len(c.Password)<8||len(c.Password)>1024 {fail(w,400,"Valid name, email and password (8+ characters) required");return}
  var id int64
  e=s.db.QueryRow(r.Context(),"INSERT INTO users(name,email,password_hash,role) VALUES($1,lower($2),$3,'Regular') RETURNING id",strings.TrimSpace(c.Name),strings.TrimSpace(c.Email),passwordHash(c.Password)).Scan(&id)
  if e!=nil{fail(w,409,"Unable to create user or email already in use");return}
