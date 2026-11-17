@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MeetingRoom from './MeetingRoom';
 import AdminConsole from './AdminConsole';
+import ChatPreferences,{readChatPreferences,chatThemes} from './ChatPreferences';
 import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
 import { 
   Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
@@ -1150,12 +1151,13 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
     const [selectedChat, setSelectedChat] = useState(null);
     const [messages, setMessages] = useState({});
     const [chatError, setChatError] = useState("");
+    const [prefs,setPrefs] = useState(()=>readChatPreferences(currentUser?.id||0));
     useEffect(()=>{
       if (!selectedChat || selectedChat.members) return;
       let live=true;
-      getMessages(Number(selectedChat.id)).then(data=>{if(live)setMessages(previous=>({...previous,[selectedChat.id]:data.messages.map(m=>({id:m.id,text:m.text,sender:m.sender===Number(currentUser?.id)?"me":String(m.sender),time:new Date(m.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}))}));}).catch(e=>{if(live)setChatError(e.message);});
+      getMessages(Number(selectedChat.id)).then(data=>{if(live)setMessages(previous=>({...previous,[selectedChat.id]:data.messages.map(m=>({id:m.id,text:m.text,sender:m.sender===Number(currentUser?.id)?"me":String(m.sender),time:new Date(m.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",hour12:!prefs.clock24})}))}));}).catch(e=>{if(live)setChatError(e.message);});
       return ()=>{live=false;};
-    },[selectedChat,currentUser?.id]);
+    },[selectedChat,currentUser?.id,prefs.clock24]);
     const [inputText, setInputText] = useState('');
     const [groups, setGroups] = useState([]);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -1184,7 +1186,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
       setChatError("");
       try {
         const result=await postMessage(Number(selectedChat.id),inputText.trim());
-        setMessages(previous=>({...previous,[selectedChat.id]:[...(previous[selectedChat.id]||[]),{id:result.message.id,text:result.message.text,sender:"me",time:new Date(result.message.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}]}));
+        setMessages(previous=>({...previous,[selectedChat.id]:[...(previous[selectedChat.id]||[]),{id:result.message.id,text:result.message.text,sender:"me",time:new Date(result.message.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",hour12:!prefs.clock24})}]}));
         setInputText("");
       } catch(e){setChatError(e.message||"Message not sent");}
     };
@@ -1206,7 +1208,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
 
     // Filter Lists
     const favUsers = users.filter(u => favorites.includes(u.id));
-    const dmUsers = users.filter(u => !favorites.includes(u.id));
+    const dmUsers = users.filter(u => u.active!==false&&!favorites.includes(u.id)).sort((a,b)=>String(prefs.sort==='role'?a.role:a.name).localeCompare(String(prefs.sort==='role'?b.role:b.name))).slice(0,prefs.dmCount);
     const teamsList = groups.filter(g => g.type === 'Team');
     const groupsList = groups.filter(g => g.type === 'Group');
 
@@ -1216,7 +1218,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                 {isUser ? (
                     <>
                     <UserAvatar name={item.name} src={item.avatar} className="w-10 h-10 text-[10px]" />
-                    <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${item.status === 'online' ? 'bg-green-500' : item.status === 'busy' ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+                    {prefs.showPresence&&item.status&&<div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${item.status === 'online' ? 'bg-green-500' : item.status === 'busy' ? 'bg-red-500' : 'bg-slate-300'}`}></div>}
                     </>
                 ) : (
                     <div className="w-10 h-10 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center text-[10px] font-bold border border-slate-100 shrink-0">
@@ -1233,7 +1235,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
 
     return (
         <div className="h-full flex flex-col relative bg-white">
-            {showChatSettings && <ChatSettingsModal onClose={() => setShowChatSettings(false)} />}
+            {showChatSettings && <ChatPreferences userId={currentUser?.id||0} initial={prefs} onSave={setPrefs} onClose={() => setShowChatSettings(false)} />}
             {chatError && <div role="alert" className="p-3 text-sm bg-red-50 text-red-700">{chatError}</div>}
             
             {/* Create Group Modal */}
@@ -1336,7 +1338,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                 </div>
                 
                 {/* Chat Area */}
-                <div className="flex-1 flex flex-col bg-[#F8FAFC] relative">
+                <div className="flex-1 flex flex-col relative" style={{backgroundColor:chatThemes[prefs.theme]||chatThemes.Quartz}}>
                     {selectedChat ? (
                         <>
                              {/* Chat Header */}
@@ -1424,7 +1426,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                             <div className="p-4 bg-white border-t border-slate-200/60">
                                 <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-3 max-w-4xl mx-auto w-full">
                                     <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-2 focus-within:ring-2 focus-within:ring-indigo-50 focus-within:border-indigo-200 transition-all">
-                                        <input className="flex-1 px-3 py-3.5 bg-transparent border-none outline-none text-xs font-medium text-slate-700 placeholder:text-slate-400" placeholder="Type a message..." value={inputText} onChange={(e) => setInputText(e.target.value)}/>
+                                        <input className="flex-1 px-3 py-3.5 bg-transparent border-none outline-none text-xs font-medium text-slate-700 placeholder:text-slate-400" placeholder="Type a message..." value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&prefs.sendCtrlEnter){e.preventDefault();if(e.ctrlKey)sendMessage();}}}/>
                                         <button type="button" className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><ImageIcon size={18}/></button>
                                         <button type="button" className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><MessageCircle size={18}/></button>
                                     </div>
