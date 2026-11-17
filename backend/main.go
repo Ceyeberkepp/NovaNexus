@@ -144,7 +144,7 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE",
   "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL)",
   "CREATE TABLE IF NOT EXISTS app_settings (name TEXT PRIMARY KEY,value TEXT NOT NULL)",
-  "INSERT INTO app_settings(name,value) VALUES (\'workspace_name\',\'NovaNexus Workspace\'),(\'default_meeting_limit\',\'1000\') ON CONFLICT(name) DO NOTHING",
+  "INSERT INTO app_settings(name,value) VALUES ('workspace_name','NovaNexus Workspace'),('default_meeting_limit','1000') ON CONFLICT(name) DO NOTHING",
   "CREATE TABLE IF NOT EXISTS audit_events (id BIGSERIAL PRIMARY KEY,actor_id BIGINT REFERENCES users(id) ON DELETE SET NULL,event TEXT NOT NULL,target TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   "CREATE TABLE IF NOT EXISTS direct_messages (id BIGSERIAL PRIMARY KEY,sender_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   "CREATE INDEX IF NOT EXISTS direct_messages_pair_idx ON direct_messages(sender_id,recipient_id,id DESC)",
