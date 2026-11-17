@@ -1,6 +1,8 @@
 {
     email {$TLS_EMAIL}
     admin off
+    # IP-address HTTPS clients typically omit SNI. Use the configured site as the default.
+    default_sni {$NOVANEXUS_DOMAIN}
 }
 {$NOVANEXUS_DOMAIN} {
     encode zstd gzip
