@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MeetingRoom from './MeetingRoom';
+import AdminConsole from './AdminConsole';
 import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
 import { 
   Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
@@ -2109,7 +2110,7 @@ function App() {
                 )}
                 {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} currentUser={user} />}
                 {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
-                {currentTab === 'admin' && (user?.role === 'Admin' ? <SecureUserManagement users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
+                {currentTab === 'admin' && (user?.role === 'Admin' ? <AdminConsole users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
             </div>
           </main>
           
