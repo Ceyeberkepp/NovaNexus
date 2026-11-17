@@ -12,10 +12,26 @@ jobs:
     env:
       DB_PASSWORD: ci-only-database-password
       BOOTSTRAP_ADMIN_PASSWORD: ci-only-temporary-administrator-password-long-enough
+      LIVEKIT_API_KEY: novanexus
+      LIVEKIT_API_SECRET: ci-only-livekit-secret-at-least-32-characters
       NOVANEXUS_DOMAIN: nexus.example.test
       TLS_EMAIL: ci@example.test
     steps:
       - uses: actions/checkout@v7
+      - name: Prepare LiveKit media server configuration
+        run: |
+          cat > livekit.yaml <<'EOF'
+          port: 7880
+          rtc:
+            tcp_port: 7881
+            udp_port: 7882
+            use_external_ip: false
+            node_ip: 127.0.0.1
+          room:
+            max_participants: 1000
+          keys:
+            novanexus: ci-only-livekit-secret-at-least-32-characters
+          EOF
       - name: Check installer syntax and runtime manifest
         run: |
           bash -n scripts/install.sh
@@ -44,6 +60,7 @@ jobs:
           grep -q 'default_sni {$NOVANEXUS_DOMAIN}' Caddyfile
           sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
           NOVANEXUS_DOMAIN=127.0.0.1 docker compose up -d https
+          docker compose ps --status running livekit
           docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           for n in $(seq 1 30); do
             if docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > /tmp/novanexus-local-ca.crt 2>/dev/null && test -s /tmp/novanexus-local-ca.crt; then
