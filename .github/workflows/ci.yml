@@ -104,5 +104,15 @@ jobs:
           curl -fsS -b /tmp/nova-cookie2 -H "Content-Type: application/json" -d '{"name":"Test Group","description":"Integration"}' "$base/api/admin/groups" | grep -q id
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/groups" | grep -q "Test Group"
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/logs" | grep -q settings.updated
+      - name: Verify persistent branding assets and validation
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:3000
+          png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ZXxQAAAAASUVORK5CYII='
+          payload=$(printf '{"key":"login_logo","data":"%s"}' "$png")
+          curl -fsS -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d "$payload" "$base/api/admin/branding" | grep -q true
+          curl -fsS "$base/api/branding" | grep -q 'data:image/png;base64'
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/settings" | grep -q 'login_logo'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie -X PUT -H 'Content-Type: application/json' -d "$payload" "$base/api/admin/branding")" = "403"
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
