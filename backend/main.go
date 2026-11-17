@@ -134,6 +134,8 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/admin/logs":s.adminLogsAPI(w,r)
  case "/api/admin/groups":s.adminGroupsAPI(w,r)
  case "/api/workspace/settings":s.workspaceSettingsAPI(w,r)
+ case "/api/branding":publicBrandingAPI(s,w,r)
+ case "/api/admin/branding":s.adminBrandingAPI(w,r)
  case "/api/health":if e:=s.db.Ping(r.Context());e!=nil{fail(w,503,"Database unavailable")}else{respond(w,200,map[string]any{"status":"ok"})}
  case "/api/meetings/token":s.meetingTokenAPI(w,r)
  case "/api/messages":s.messagesAPI(w,r)
