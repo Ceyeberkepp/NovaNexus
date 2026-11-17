@@ -15,13 +15,14 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const switchingRef=useRef(false);
   const autostartedRef=useRef(false);
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
-  useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}}).catch(()=>{});return ()=>{active=false;};},[]);
+  const [meetingBaseURL,setMeetingBaseURL]=useState(window.location.origin);
+  useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}const requested=String(data?.settings?.meeting_public_url||'');if(active&&requested.startsWith('https://'))setMeetingBaseURL(requested.replace(/\/$/ ,''));}).catch(()=>{});return ()=>{active=false;};},[]);
   const [connection,setConnection] = useState(null);
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(false);
   const [ended,setEnded] = useState(false);
   const [copyFeedback,setCopyFeedback] = useState('');
-  const shareUrl=window.location.origin+'/'+encodeURIComponent(roomId||'');
+  const shareUrl=meetingBaseURL+'/'+encodeURIComponent(roomId||'');
   async function copyInvite(){try{await navigator.clipboard.writeText(shareUrl);setCopyFeedback('Invite link copied.');}catch{setCopyFeedback('Select and copy the invite link below.');}}
 
   async function join(breakoutID=0) {
@@ -70,7 +71,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       onError={(e)=>setError(e?.message||'Connection failed')}
       style={{height:'100%'}}>
       <VideoConference />
-      <MeetingExtras roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>
+      <MeetingExtras shareUrl={shareUrl} roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>
       {showSettings&&<ConnectedSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
     </LiveKitRoom>
     {error&&<div role="alert" className="fixed bottom-6 left-6 z-50 bg-red-800 text-white p-3 rounded-lg">{error}</div>}
@@ -94,7 +95,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       {error&&<div role="alert" className="rounded-lg bg-red-900 p-3">{error}</div>}
       {showSettings&&<VideoSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
       <div className="flex gap-3">
-        <button onClick={join} disabled={loading} className="flex-1 rounded-lg bg-indigo-600 p-3 font-semibold disabled:opacity-60">{loading?'Connecting...':'Join Meeting'}</button>
+        <button onClick={()=>join()} disabled={loading} className="flex-1 rounded-lg bg-indigo-600 p-3 font-semibold disabled:opacity-60">{loading?'Connecting...':'Join Meeting'}</button>
         <button onClick={onEnd} className="rounded-lg border border-slate-600 p-3">Back</button>
       </div>
     </div>
