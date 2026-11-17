@@ -15,5 +15,11 @@
         Permissions-Policy "camera=(self), microphone=(self), display-capture=(self)"
         -Server
     }
-    reverse_proxy app:3000
+    @livekit path /rtc /rtc/*
+    handle @livekit {
+        reverse_proxy livekit:7880
+    }
+    handle {
+        reverse_proxy app:3000
+    }
 }
