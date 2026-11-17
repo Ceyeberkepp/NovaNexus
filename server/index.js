@@ -50,26 +50,49 @@ async function authenticate(req,res,next) {
   try {
     const token=getCookies(req)[cookieName];
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return res.status(401).json({error:"Sign in required"});
-    const result=await pool.query("SELECT u.id,u.name,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW() AND u.active=TRUE",[hashToken(token)]);
+    const result=await pool.query("SELECT u.id,u.name,u.email,u.role,u.must_change_password FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW() AND u.active=TRUE",[hashToken(token)]);
     if (!result.rowCount) return res.status(401).json({error:"Session expired"});
-    req.user=result.rows[0]; next();
+    req.user=result.rows[0]; if(req.user.must_change_password && req.path !== '/auth/change-password') return res.status(403).json({error:'Password change required',must_change_password:true}); next();
   } catch(e) { next(e); }
 }
 const loginLimiter=rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:"draft-7",legacyHeaders:false,message:{error:"Too many attempts. Try again later."}});
 app.post("/api/auth/login",loginLimiter,async(req,res,next)=>{
   try {
-    const {email,password}=req.body || {};
+    const {email,password,setupCode}=req.body || {};
     if(typeof email!=="string" || typeof password!=="string" || email.length>254 || password.length>1024) return res.status(400).json({error:"Invalid credentials"});
-    const result=await pool.query("SELECT id,name,email,role,password_hash FROM users WHERE lower(email)=lower($1) AND active=TRUE",[email.trim()]);
+    const result=await pool.query("SELECT id,name,email,role,password_hash,must_change_password FROM users WHERE (lower(email)=lower($1) OR (lower($1)='admin' AND lower(email)='admin@local.invalid')) AND active=TRUE",[email.trim()]);
     const user=result.rows[0];
     if (!user || !passwordMatches(password,user.password_hash)) return res.status(401).json({error:"Invalid credentials"});
+    if(user.must_change_password && (!process.env.BOOTSTRAP_SETUP_CODE || typeof setupCode !== "string" || setupCode.length>256 || !crypto.timingSafeEqual(Buffer.from(hashToken(setupCode)),Buffer.from(hashToken(process.env.BOOTSTRAP_SETUP_CODE))))) return res.status(401).json({error:"Initial setup code required"});
     const token=crypto.randomBytes(32).toString("hex");
     await pool.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,NOW()+INTERVAL '8 hours')",[hashToken(token),user.id]);
     res.cookie(cookieName,token,cookieOptions);
-    res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role}});
+    res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,must_change_password:user.must_change_password}});
   } catch(e){ next(e); }
 });
-app.get("/api/auth/me",authenticate,(req,res)=>res.json({user:req.user}));
+app.get("/api/auth/me",async(req,res,next)=>{
+  try {
+    const token=getCookies(req)[cookieName];
+    if(!token || !/^[a-f0-9]{64}$/.test(token)) return res.status(401).json({error:"Sign in required"});
+    const result=await pool.query("SELECT u.id,u.name,u.email,u.role,u.must_change_password FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW() AND u.active=TRUE",[hashToken(token)]);
+    if(!result.rowCount) return res.status(401).json({error:"Session expired"});
+    res.json({user:result.rows[0]});
+  } catch(e){next(e);}
+});
+app.post("/api/auth/change-password",authenticate,loginLimiter,async(req,res,next)=>{
+  try {
+    const {currentPassword,newPassword,setupCode}=req.body || {};
+    if(typeof currentPassword!=="string" || typeof newPassword!=="string" || newPassword.length<16 || newPassword.length>1024 || newPassword==="admin" || newPassword===currentPassword) return res.status(400).json({error:"Choose a different password with at least 16 characters"});
+    const result=await pool.query("SELECT password_hash,must_change_password FROM users WHERE id=$1",[req.user.id]);
+    const stored=result.rows[0];
+    if(!stored || !passwordMatches(currentPassword,stored.password_hash)) return res.status(401).json({error:"Current password incorrect"});
+    if(stored.must_change_password && (!process.env.BOOTSTRAP_SETUP_CODE || typeof setupCode!=="string" || setupCode.length>256 || !crypto.timingSafeEqual(Buffer.from(hashToken(setupCode)),Buffer.from(hashToken(process.env.BOOTSTRAP_SETUP_CODE))))) return res.status(401).json({error:"Initial setup code required"});
+    await pool.query("UPDATE users SET password_hash=$1,must_change_password=FALSE WHERE id=$2",[hashPassword(newPassword),req.user.id]);
+    await pool.query("DELETE FROM sessions WHERE user_id=$1",[req.user.id]);
+    res.clearCookie(cookieName,{path:"/",httpOnly:true,secure:isProd,sameSite:"strict"});
+    res.json({ok:true,reauthenticate:true});
+  } catch(e){next(e);}
+});
 app.post("/api/auth/logout",async(req,res,next)=>{
   try {
     const token=getCookies(req)[cookieName];
@@ -99,9 +122,17 @@ app.use((err,req,res,next)=>{console.error("Request failed",err?.code||err?.name
 async function start() {
   if(!process.env.DATABASE_URL) throw Error("DATABASE_URL is required");
   await pool.query("SELECT 1");
-  await pool.query("CREATE TABLE IF NOT EXISTS users (id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('Admin','Regular')), active BOOLEAN NOT NULL DEFAULT TRUE)");
+  await pool.query("CREATE TABLE IF NOT EXISTS users (id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('Admin','Regular')), active BOOLEAN NOT NULL DEFAULT TRUE, must_change_password BOOLEAN NOT NULL DEFAULT FALSE)");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE");
   await pool.query("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TIMESTAMPTZ NOT NULL)");
-  if(process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+  if(process.env.BOOTSTRAP_SETUP_CODE) {
+    if(process.env.BOOTSTRAP_SETUP_CODE.length<24) throw Error("BOOTSTRAP_SETUP_CODE must contain at least 24 characters");
+    const existing=await pool.query("SELECT id FROM users WHERE role='Admin' LIMIT 1");
+    if(!existing.rowCount) {
+      await pool.query("INSERT INTO users(name,email,password_hash,role,must_change_password) VALUES($1,$2,$3,'Admin',TRUE)",["Administrator","admin@local.invalid",hashPassword("admin")]);
+      console.log("Initial admin account created; one-time setup code required and password change enforced");
+    }
+  } else if(process.env.BOOTSTRAP_ADMIN_EMAIL && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
     if(process.env.BOOTSTRAP_ADMIN_PASSWORD.length<20) throw Error("Bootstrap password must be at least 20 characters");
     const existing=await pool.query("SELECT id FROM users WHERE role='Admin' LIMIT 1");
     if(!existing.rowCount) await pool.query("INSERT INTO users(name,email,password_hash,role) VALUES($1,lower($2),$3,'Admin')",[process.env.BOOTSTRAP_ADMIN_NAME||"Administrator",process.env.BOOTSTRAP_ADMIN_EMAIL,hashPassword(process.env.BOOTSTRAP_ADMIN_PASSWORD)]);
