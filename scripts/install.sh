@@ -183,7 +183,7 @@ fi
 docker compose up -d --wait --wait-timeout 240
 # Bind-mounted Caddyfile updates do not automatically restart a healthy proxy.
 docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail "Invalid HTTPS proxy configuration."
-docker compose exec -T https caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || fail "Could not reload updated HTTPS configuration."
+docker compose restart https >/dev/null || fail "Could not restart HTTPS proxy with updated configuration."
 log "Checking HTTPS certificate and application health"
 CURL_CA=()
 if [[ "$TLS_MODE" == internal ]]; then
