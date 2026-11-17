@@ -15,6 +15,7 @@ import (
  "net/url"
  "os"
  "path/filepath"
+ "strconv"
  "strings"
  "sync"
  "time"
@@ -25,7 +26,6 @@ import (
 )
 
 const cookieName = "novanexus_session"
-const sessionLifetime = 8*time.Hour
 
 type Server struct { db *pgxpool.Pool; secure bool; limitMu sync.Mutex; attempts map[string][]time.Time }
 type User struct { ID int64; Name, Email, Role string; MustChange bool }
@@ -72,8 +72,14 @@ func (s *Server) login(w http.ResponseWriter,r *http.Request) {
  err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,role,must_change_password,password_hash FROM users WHERE (lower(email)=lower($1) OR (lower($1)='admin' AND lower(email)='admin@local.invalid')) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Role,&u.MustChange,&stored)
  if err!=nil||!verifyPassword(c.Password,stored){fail(w,401,"Invalid credentials");return}
  token:=randomHex(32)
- if _,e:=s.db.Exec(r.Context(),`INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,NOW()+INTERVAL '8 hours')`,tokenHash(token),u.ID);e!=nil {fail(w,500,"Unable to create session");return}
- http.SetCookie(w,cookie(token,s.secure,int(sessionLifetime.Seconds())))
+ var durationText string
+ if e:=s.db.QueryRow(r.Context(),"SELECT value FROM app_settings WHERE name='session_minutes'").Scan(&durationText);e!=nil{fail(w,503,"Session policy unavailable");return}
+ minutes,e:=strconv.Atoi(durationText)
+ if e!=nil||minutes<5||minutes>480{fail(w,503,"Invalid session policy");return}
+ expires:=time.Now().Add(time.Duration(minutes)*time.Minute)
+ if _,e:=s.db.Exec(r.Context(),"INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)",tokenHash(token),u.ID,expires);e!=nil {fail(w,500,"Unable to create session");return}
+ http.SetCookie(w,cookie(token,s.secure,minutes*60))
+ s.audit(r,u.ID,"auth.login",u.Email)
  respond(w,200,map[string]any{"user":u.data()})
 }
 func (s *Server) me(w http.ResponseWriter,r *http.Request) {
@@ -146,7 +152,7 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE",
   "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL)",
   "CREATE TABLE IF NOT EXISTS app_settings (name TEXT PRIMARY KEY,value TEXT NOT NULL)",
-  "INSERT INTO app_settings(name,value) VALUES ('workspace_name','NovaNexus Workspace'),('default_meeting_limit','1000') ON CONFLICT(name) DO NOTHING",
+  "INSERT INTO app_settings(name,value) VALUES ('workspace_name','NovaNexus Workspace'),('default_meeting_limit','1000'),('session_minutes','480') ON CONFLICT(name) DO NOTHING",
   "CREATE TABLE IF NOT EXISTS audit_events (id BIGSERIAL PRIMARY KEY,actor_id BIGINT REFERENCES users(id) ON DELETE SET NULL,event TEXT NOT NULL,target TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   "CREATE TABLE IF NOT EXISTS workspace_groups (id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL UNIQUE,description TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS group_members (group_id BIGINT NOT NULL REFERENCES workspace_groups(id) ON DELETE CASCADE,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(group_id,user_id))",
