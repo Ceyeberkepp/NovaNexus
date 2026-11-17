@@ -16,8 +16,12 @@ jobs:
       TLS_EMAIL: ci@example.test
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Docker Compose
-        run: docker compose config --quiet
+      - name: Check installer syntax and runtime manifest
+        run: |
+          bash -n scripts/install.sh
+          docker compose config --quiet
+          test -f Dockerfile
+          test -f Caddyfile
       - name: Build non-root Go API image
         run: docker compose build app
       - name: Start PostgreSQL and Go API
