@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 20
     env:
       DB_PASSWORD: ci-only-database-password
-      BOOTSTRAP_SETUP_CODE: ci-only-setup-code-long-and-randomized-for-test
+      BOOTSTRAP_ADMIN_PASSWORD: ci-only-temporary-administrator-password-long-enough
       NOVANEXUS_DOMAIN: nexus.example.test
       TLS_EMAIL: ci@example.test
     steps:
