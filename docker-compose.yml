@@ -25,8 +25,7 @@ services:
     environment:
       DATABASE_URL: postgres://novanexus:${DB_PASSWORD:?Set DB_PASSWORD}@db:5432/novanexus
       NODE_ENV: production
-      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?Set email}
-      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set secure password}
+      BOOTSTRAP_SETUP_CODE: ${BOOTSTRAP_SETUP_CODE:?Set a random one-time setup code}
       PORT: 3000
       TRUST_PROXY: "1"
     expose: ["3000"]
