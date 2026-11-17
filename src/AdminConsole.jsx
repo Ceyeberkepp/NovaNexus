@@ -18,7 +18,7 @@ export default function AdminConsole({users,setUsers}){
  const [resetTarget,setResetTarget]=useState(null);
  const [resetForm,setResetForm]=useState({newPassword:'',confirmPassword:'',adminPassword:'',requireChange:true});
  const [form,setForm]=useState({name:'',email:'',password:''});
- const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',session_minutes:'480',waiting_room_enabled:'false',waiting_room_message:'Please wait for your host to admit you.',ai_enabled:'true'});
+ const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',meeting_public_url:'',session_minutes:'480',waiting_room_enabled:'false',waiting_room_message:'Please wait for your host to admit you.',ai_enabled:'true'});
  const [logs,setLogs]=useState([]);
  const [groups,setGroups]=useState([]);
  const [groupForm,setGroupForm]=useState({name:'',description:''});
@@ -56,7 +56,7 @@ export default function AdminConsole({users,setUsers}){
  }
  async function saveSettings(e){
   e.preventDefault();
-  await execute(()=>adminRequest('settings',{method:'PUT',body:JSON.stringify({workspaceName:settings.workspace_name,defaultMeetingLimit:Number(settings.default_meeting_limit),sessionMinutes:Number(settings.session_minutes),waitingRoomEnabled:settings.waiting_room_enabled==='true',waitingRoomMessage:settings.waiting_room_message,aiEnabled:settings.ai_enabled==='true'})}));
+  await execute(()=>adminRequest('settings',{method:'PUT',body:JSON.stringify({workspaceName:settings.workspace_name,defaultMeetingLimit:Number(settings.default_meeting_limit),meetingPublicURL:settings.meeting_public_url||'',sessionMinutes:Number(settings.session_minutes),waitingRoomEnabled:settings.waiting_room_enabled==='true',waitingRoomMessage:settings.waiting_room_message,aiEnabled:settings.ai_enabled==='true'})}));
  }
  async function uploadBranding(e,key){
   const file=e.target.files?.[0];if(!file)return;
@@ -136,6 +136,8 @@ export default function AdminConsole({users,setUsers}){
           <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500">Waiting Room Logo <input type="file" accept="image/png,image/jpeg,image/webp" className="mt-3 block text-xs" onChange={e=>uploadBranding(e,'waiting_logo')}/></label>
           {settings.waiting_logo&&<img alt="Waiting room logo" src={settings.waiting_logo} className="max-h-16 object-contain"/>}
           <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500">Maximum Participants (1–1000)<input className={input+' mt-3'} type="number" min="1" max="1000" required value={settings.default_meeting_limit} onChange={e=>setSettings({...settings,default_meeting_limit:e.target.value})}/></label>
+          <label className="block text-[11px] font-black uppercase tracking-widest text-slate-500">Public meeting link domain (optional)<input className={input+' mt-3'} type="url" placeholder="https://nexu.cyverax.com" value={settings.meeting_public_url||''} onChange={e=>setSettings({...settings,meeting_public_url:e.target.value})}/></label>
+          <p className="text-xs text-slate-500">Links use this hostname followed by the eight-digit meeting ID, for example https://nexu.cyverax.com/12345678. Leave empty for the current server URL. Your DNS or tunnel must already route HTTPS and WebSockets to NovaNexus. Saving the URL does not create a tunnel or configure networking.</p>
           <p className="text-[11px] leading-relaxed text-amber-700">Waiting-room preferences are saved, but guest admission is not yet enabled. The setting is a preview until host approval is implemented. Meeting size is enforced by the backend.</p>
          </div>
          <div className="flex min-h-[420px] items-center justify-center overflow-hidden rounded-[2.5rem] bg-zinc-900 p-8">
