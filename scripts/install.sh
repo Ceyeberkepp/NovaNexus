@@ -22,16 +22,21 @@ valid_ipv4(){
   [[ "$address" != 0.0.0.0 && "$address" != 255.255.255.255 && "${parts[0]}" != 127 ]]
 }
 detect_ipv4(){
-  local candidate
-  if command -v hostname >/dev/null; then
-    for candidate in $(hostname -I 2>/dev/null || true); do
-      if valid_ipv4 "$candidate" && [[ "$candidate" != 169.254.* ]]; then printf "%s" "$candidate"; return; fi
-    done
-  fi
+  local candidate fallback=""
+  # Prefer the host default-route source, not the Docker bridge (e.g., 172.17.0.1).
   if command -v ip >/dev/null; then
-    candidate=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n1)
+    candidate=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1)
     if valid_ipv4 "$candidate"; then printf "%s" "$candidate"; return; fi
   fi
+  if command -v hostname >/dev/null; then
+    for candidate in $(hostname -I 2>/dev/null || true); do
+      if valid_ipv4 "$candidate" && [[ "$candidate" != 169.254.* ]]; then
+        if [[ "$candidate" != 172.17.* && "$candidate" != 172.18.* && "$candidate" != 172.19.* ]]; then printf "%s" "$candidate"; return; fi
+        [[ -n "$fallback" ]] || fallback=$candidate
+      fi
+    done
+  fi
+  [[ -z "$fallback" ]] || { printf "%s" "$fallback"; return; }
   return 1
 }
 trap 'printf "[NovaNexus] Installation stopped at line %s. Existing data was not intentionally deleted.\n" "$LINENO" >&2' ERR
@@ -55,7 +60,11 @@ fi
 
 NOVANEXUS_DOMAIN=${NOVANEXUS_DOMAIN:-}
 NOVANEXUS_TLS_EMAIL=${NOVANEXUS_TLS_EMAIL:-}
-if [[ -z "$NOVANEXUS_DOMAIN" ]]; then
+if [[ "$RESUME_INSTALL" == 1 ]]; then
+  NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
+  [[ -n "$NOVANEXUS_DOMAIN" ]] || fail "Existing deployment address missing."
+  log "Using existing deployment address: $NOVANEXUS_DOMAIN"
+elif [[ -z "$NOVANEXUS_DOMAIN" ]]; then
   NOVANEXUS_DOMAIN=$(detect_ipv4 || true)
   [[ -z "$NOVANEXUS_DOMAIN" ]] || log "Using detected server IP: $NOVANEXUS_DOMAIN"
 fi
@@ -150,6 +159,10 @@ else
 fi
 chmod 600 .env
 if [[ "$TLS_MODE" == internal ]]; then
+  # Upgrade existing Caddyfile in place; a resume does not re-clone repository files.
+  if ! grep -Eq '^[[:space:]]+default_sni[[:space:]]+' Caddyfile; then
+    sed -i '/^[[:space:]]*admin off[[:space:]]*$/a\    default_sni {$NOVANEXUS_DOMAIN}' Caddyfile
+  fi
   if ! grep -Eq '^[[:space:]]+tls internal[[:space:]]*$' Caddyfile; then
     sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
   fi
@@ -168,6 +181,9 @@ else
   fi
 fi
 docker compose up -d --wait --wait-timeout 240
+# Bind-mounted Caddyfile updates do not automatically restart a healthy proxy.
+docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail "Invalid HTTPS proxy configuration."
+docker compose exec -T https caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || fail "Could not reload updated HTTPS configuration."
 log "Checking HTTPS certificate and application health"
 CURL_CA=()
 if [[ "$TLS_MODE" == internal ]]; then
