@@ -166,7 +166,12 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "CREATE TABLE IF NOT EXISTS group_members (group_id BIGINT NOT NULL REFERENCES workspace_groups(id) ON DELETE CASCADE,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(group_id,user_id))",
   "CREATE TABLE IF NOT EXISTS direct_messages (id BIGSERIAL PRIMARY KEY,sender_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   "CREATE INDEX IF NOT EXISTS direct_messages_pair_idx ON direct_messages(sender_id,recipient_id,id DESC)",
-  "CREATE TABLE IF NOT EXISTS meeting_rooms (room VARCHAR(8) PRIMARY KEY CHECK(room ~ '^[0-9]{8}
+  "CREATE TABLE IF NOT EXISTS meeting_rooms (room VARCHAR(8) PRIMARY KEY CHECK(room ~ '^[0-9]{8}$'),owner_id BIGINT NOT NULL REFERENCES users(id),kind TEXT NOT NULL DEFAULT 'normal' CHECK(kind IN ('normal','call')),closed BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
+  "CREATE TABLE IF NOT EXISTS direct_calls (id BIGSERIAL PRIMARY KEY,caller_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),room VARCHAR(8) NOT NULL UNIQUE REFERENCES meeting_rooms(room),status TEXT NOT NULL DEFAULT 'ringing' CHECK(status IN ('ringing','accepted','declined','missed','canceled')),audio_only BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),expires_at TIMESTAMPTZ NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS direct_calls_user_status_idx ON direct_calls(recipient_id,status,created_at DESC)",
+  "CREATE TABLE IF NOT EXISTS meeting_breakouts (id BIGSERIAL PRIMARY KEY,parent VARCHAR(8) NOT NULL REFERENCES meeting_rooms(room) ON DELETE CASCADE,name VARCHAR(80) NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS breakout_members (breakout_id BIGINT NOT NULL REFERENCES meeting_breakouts(id) ON DELETE CASCADE,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(breakout_id,user_id))",
+  "CREATE TABLE IF NOT EXISTS calendar_events (id BIGSERIAL PRIMARY KEY,owner_id BIGINT NOT NULL REFERENCES users(id),title TEXT NOT NULL,event_date DATE NOT NULL,event_time TIME NOT NULL,duration_minutes INT NOT NULL DEFAULT 60)",
   "CREATE INDEX IF NOT EXISTS calendar_events_owner_date_idx ON calendar_events(owner_id,event_date,event_time)",
  }
  for _,query:=range statements {if _,e:=db.Exec(ctx,query);e!=nil{return e}}
