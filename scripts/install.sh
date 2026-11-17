@@ -227,6 +227,14 @@ else
   fi
 fi
 docker compose up -d --wait --wait-timeout 240
+log "Setting up the built-in local AI assistant (small starter model)"
+if docker compose exec -T ollama ollama list 2>/dev/null | grep -Fq "qwen2.5:0.5b"; then
+  log "Starter AI model is already installed."
+elif docker compose exec -T ollama ollama pull qwen2.5:0.5b; then
+  log "Local AI assistant model is ready."
+else
+  log "WARNING: AI model download did not complete. Other NovaNexus services remain available; AI can be retried later."
+fi
 # Bind-mounted Caddyfile updates do not automatically restart a healthy proxy.
 docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail "Invalid HTTPS proxy configuration."
 docker compose restart https >/dev/null || fail "Could not restart HTTPS proxy with updated configuration."
