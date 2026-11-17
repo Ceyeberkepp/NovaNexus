@@ -40,7 +40,7 @@ function CallRow({call,user,users}){
      <div className={'mt-1 flex gap-1.5 items-center text-[11px] '+(missed?'text-rose-600':'text-slate-500')}><Icon size={13}/><span>{missed?'Missed incoming':call.status==='declined'?'Declined':call.status==='canceled'?'Canceled':call.status==='missed'?'Not answered':outgoing?'Outgoing':'Incoming'}</span><span className="text-slate-400">·</span><span>{call.audioOnly?'Audio':'Video'}</span></div>
    </div>
    <div className="flex items-center gap-4"><div className="text-right text-[11px] text-slate-500"><div>{when(call.createdAt)}</div>{duration(call)&&<div className="mt-1 text-slate-400">{duration(call)}</div>}</div>
-     {member&&member.id!==user.id&&<div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"><button aria-label={'Call '+label} title="Call again" className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-100" onClick={()=>eventCall(member,true)}><Phone size={16}/></button><button aria-label={'Video call '+label} title="Video call again" className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-100" onClick={()=>eventCall(member,false)}><Video size={17}/></button></div>}
+     {member&&member.id!==user.id&&<div className="flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"><button aria-label={'Call '+label} title="Call again" className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-100" onClick={()=>eventCall(member,true)}><Phone size={16}/></button><button aria-label={'Video call '+label} title="Video call again" className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-100" onClick={()=>eventCall(member,false)}><Video size={17}/></button></div>}
    </div>
  </div>;
 }
