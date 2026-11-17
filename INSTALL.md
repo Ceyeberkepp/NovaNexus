@@ -1,70 +1,83 @@
-# NovaNexus deployment — development preview
+# NovaNexus one-command installer (development preview)
 
-The install entrypoint is `scripts/install.sh` (Ubuntu/Debian, amd64/arm64).
-It installs Git, curl, Docker Engine, Docker Compose v2 and OpenSSL, clones a
-selected source ref, builds the React frontend + Go API, initializes a PostgreSQL
-database and starts a Caddy HTTPS reverse proxy.
+**Release status:** The Go API, PostgreSQL database, HTTPS reverse proxy and
+frontend are packaged together. This is **not** a production-ready collaboration
+platform yet: live video, messaging, scheduling, MCP and related integrations
+remain unfinished. Do not publish a live instance until release testing passes.
 
-**Do not run this preview on production hosts yet:** no end-to-end deployment
-test, firewall audit, migrations/backup validation or external HTTPS check
-has passed in this environment.
+## Why Docker is included
 
-## Prerequisites
+Docker is an **internal runtime** used to isolate and run the PostgreSQL database,
+Go backend and Caddy TLS reverse proxy. Users do **not** install, configure or
+operate Docker manually. The installer downloads everything needed via apt and
+builds/runs the application. The frontend build uses Node only inside the
+builder container; users do not install Node or Go on their host.
 
-- Dedicated Ubuntu/Debian server with root/sudo access
-- Public FQDN resolving to its public IP, external ports TCP 80 and 443
-- Enough RAM, disk and CPU for Go compilation, Node compilation, Postgres
-  and containers; a small machine may need swap
-- No existing application on ports 80 and 443
-- Keep the target host and its outbound internet supply-chain path trusted
+## One command
 
-## Review first, then install a tested release
-
-Choose an audited tag or SHA (not a moving branch) for deployment. Download,
-inspect and checksum the installer; do not blindly pipe network content
-to root. The installer currently requires a branch/tag and rejects an existing
-/opt/novanexus folder.
-
-Example after obtaining and reviewing a local copy of the script:
+On a **fresh supported Ubuntu/Debian server**, download and run a **reviewed,
+tested release** of the installer with the following structure (replace the
+release tag with a published, validated tag):
 
 ```bash
-sudo env NOVANEXUS_DOMAIN=nexus.example.com \
-  NOVANEXUS_TLS_EMAIL=you@example.com \
-  NOVANEXUS_REF=YOUR_TESTED_TAG \
-  bash ./scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/RELEASE_TAG/scripts/install.sh | sudo env NOVANEXUS_REF=RELEASE_TAG bash
 ```
 
-The installer creates a random database password and a random 24-byte setup
-secret, writes a root-readable-only `.env`, and checks the public HTTPS
-health endpoint. It fails if certificate issuance / reachability is not
-confirmed.
+A fresh server must already have a way to download the bootstrap script
+(`curl` in the example); **no remote installer can download itself without an
+existing network/download facility**. Once the installer starts it automatically
+installs missing Git, curl, CA certificates, OpenSSL, Docker Engine and
+Docker Compose v2. It then pulls NovaNexus, builds the Go and React app, creates
+PostgreSQL credentials and the one-time administrator setup code, and starts
+and verifies the complete packaged stack.
 
-## First login
+For safer operation, download the script separately, inspect it and verify
+its release integrity before running it as root. Avoid piping unreviewed
+moving-branch code into sudo.
+
+## Prompts and prerequisites
+
+The installer asks only for the public DNS name and TLS registration email,
+unless `NOVANEXUS_DOMAIN` and `NOVANEXUS_TLS_EMAIL` are already supplied.
+It requires Ubuntu or Debian, an x86_64 or ARM64 host, systemd, root privileges,
+outbound network access, a public DNS name resolving to the host, and inbound
+TCP 80/443 to issue a publicly trusted certificate. It refuses to overwrite an
+existing `/opt/novanexus` installation. If installation or HTTPS verification
+fails, it exits with an error; it **does not** report the app as ready.
+
+No manual PostgreSQL, Go, Node.js, Nginx, Caddy or Docker commands are needed
+for the supported installation path.
+
+## First-time administrator
 
 - Username: `admin`
 - Temporary password: `admin`
-- Setup code: printed once by the installer and saved in the root-only
-  deployment `.env` file as `BOOTSTRAP_SETUP_CODE`
-- On first login, change the password to a different secret of 16+
-  characters. Existing sessions are revoked.
-- The known temporary password **cannot** authenticate without the
-  separately generated random installation secret.
+- Separate high-entropy one-time setup code: printed by the installer and saved
+  in root-only `/opt/novanexus/.env`.
+- Before the dashboard unlocks, replace the temporary password with a
+  different password of at least 16 characters; existing sessions are revoked.
+- The known `admin/admin` combination is **rejected without the setup code**.
 
-This is a compatibility bootstrap flow, not a recommended long-term login
-mechanism. Configure MFA, secret rotation and recovery before public release.
+The temporary credentials are a compatibility convenience, not a replacement
+for an audited recovery policy and MFA. Avoid deploying them on the public
+internet until the full release security review is complete.
 
-## Logs
+## Verification and troubleshooting
+
+On a successfully installed server:
 
 ```bash
-cd /opt/novanexus
-sudo docker compose ps
-sudo docker compose logs --tail=100 app https db
+sudo docker compose -f /opt/novanexus/docker-compose.yml --project-directory /opt/novanexus ps
 ```
 
-## Known blockers
+The installer itself checks `https://YOUR_DOMAIN/api/health` with a valid TLS
+certificate. It will not silently downgrade to HTTP. TCP 80 is reserved for
+ACME HTTP challenges and HTTPS redirection.
 
-The user interface still includes unconnected prototype elements. Video
-calls, message delivery, persistent scheduling, profile updates, true
-activity auditing, MCP server tooling and disaster recovery procedures
-remain unimplemented or unverified. An installation is not equivalent
-to a completed collaboration platform.
+## Known missing functionality
+
+This one-command deployment currently packages only *implemented* components.
+It cannot provide working video conferences, persistent chat or calendar,
+MCP services, MFA, backups or notifications until those subsystems are
+implemented and tested. The current pull request is a development preview,
+not a complete production release.
