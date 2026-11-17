@@ -6,6 +6,17 @@ NovaNexus is being built as a secure, self-hosted environment for teams and admi
 
 > **Development status:** NovaNexus is **not yet production-ready**. The imported React workspace contains prototype features. Direct messaging, personal calendar events, and LiveKit-based video meeting integration now have initial implementations. Group messaging, guest invitations, MFA, MCP, extensive admin functions, and validated high-capacity media deployment remain unfinished.
 
+## Workspace functionality
+
+The original visual design is retained and gradually connected to working APIs:
+
+- **Admin Console:** six original sections (Users, Groups, Security, Meetings, Branding, Logs), plus AI Assistant settings. User create/edit/disable/enable and administrator password resets persist in PostgreSQL. Groups, group membership, audit logs, branded assets, and workspace/meeting/session settings are backed by server APIs.
+- **Chat Settings:** original Notifications, Display, Sidebar, Advanced and Calls preferences restored. Browser-specific options are saved locally; chat refresh, time display and recent-activity sorting have working behavior. Email notifications, group read receipts and Markdown formatting are not enabled until their supporting services exist.
+- **Video Conference:** LiveKit provides audio, video, screen sharing, chat and participant controls. The Video Settings dialog includes device switching, camera preview, audio processing and video capture preferences; the live meeting toolbar includes local browser screen recording and a copyable invite link. Recording downloads locally (not cloud recording). Breakouts, guest lobby approval, remote control and broadcast egress still require server features.
+- **Nexus AI Assistant:** authenticated AI chat through a private Ollama service. The one-click installer prepares a small local starter model (`qwen2.5:0.5b`). No external API key is required. Answers may be inaccurate; the assistant cannot read private messages or modify accounts. Admins may disable the assistant. The model can require additional RAM and download time.
+
+**Important:** These integrations remain development-preview functionality. Real cross-browser media, firewall/NAT, optional large meetings, and security audit must pass before a production deployment.
+
 ## One-click installation (Ubuntu / Debian)
 
 > **Development preview — not production-certified.** This installs the implemented Go API, PostgreSQL, React frontend, HTTPS reverse proxy and LiveKit media service; it does not automatically make guest invitations, webinar-scale conferencing, MFA or MCP production-ready. Review the script before running it with administrator privileges.
@@ -16,7 +27,7 @@ NovaNexus is being built as a secure, self-hosted environment for teams and admi
 apt-get update && apt-get install -y ca-certificates curl && curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh && bash /root/novanexus-install.sh
 ```
 
-This single command installs the bootstrap downloader if needed, then launches the installer. The installer automatically installs the remaining packages and configures **Docker's official APT repository** to install Engine, Buildx, Compose, and containerd. It then builds the Go backend and React frontend, and starts PostgreSQL, Caddy HTTPS, and a LiveKit media server. **You do not manually configure Docker or the database.** On systems already containing `curl`, you may use only the download-and-run portion. Review the downloaded installer before running untrusted code as root.
+This single command installs the bootstrap downloader if needed, then launches the installer. The installer automatically installs the remaining packages and configures **Docker's official APT repository** to install Engine, Buildx, Compose, and containerd. It then builds the Go backend and React frontend, starts PostgreSQL, Caddy HTTPS, LiveKit and the private Ollama AI service, and attempts to pull the starter model. **You do not manually configure Docker or the database.** On systems already containing `curl`, you may use only the download-and-run portion. Review the downloaded installer before running untrusted code as root.
 
 **Video meetings:** Authenticated users can start/join rooms using the built-in camera, microphone, screen-sharing and leave controls. Room limits accept **1–1000** participants; this is a configured room limit, **not** a verified claim that a single host can sustain 1000 simultaneous audio/video streams. The installer publishes **7881/TCP** and **7882/UDP** for WebRTC media. These ports must be reachable from participants' devices; Docker and Caddy cannot fix an upstream firewall/router. Private-IP HTTPS must be trusted by client browsers for webcam and WebSocket usage. For high-capacity internet rooms you need appropriate SFU scaling, bandwidth engineering, TURN/NAT and real load testing. Guest access is not yet enabled.
 
