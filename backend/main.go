@@ -54,8 +54,9 @@ func (s *Server) who(r *http.Request) (User,error) {
  err=s.db.QueryRow(r.Context(),`SELECT u.id,u.name,u.email,u.role,u.must_change_password FROM sessions ss JOIN users u ON ss.user_id=u.id WHERE ss.token_hash=$1 AND ss.expires_at>NOW() AND u.active=TRUE`,tokenHash(c.Value)).Scan(&u.ID,&u.Name,&u.Email,&u.Role,&u.MustChange)
  return u,err
 }
-func (s *Server) limited(r *http.Request) bool {
+func (s *Server) limited(r *http.Request, account string) bool {
  host,_,e:=net.SplitHostPort(r.RemoteAddr);if e!=nil {host=r.RemoteAddr}
+ host = host + "|" + strings.ToLower(strings.TrimSpace(account))
  now:=time.Now();s.limitMu.Lock();defer s.limitMu.Unlock()
  recent:=s.attempts[host][:0];for _,t:=range s.attempts[host] {if now.Sub(t)<15*time.Minute {recent=append(recent,t)}}
  if len(recent)>=10{s.attempts[host]=recent;return true}
@@ -64,8 +65,8 @@ func (s *Server) limited(r *http.Request) bool {
  return false
 }
 func (s *Server) login(w http.ResponseWriter,r *http.Request) {
- if s.limited(r){fail(w,429,"Too many attempts");return}
  var c credentials;if asJSON(r,&c)!=nil||len(c.Email)>254||len(c.Password)>1024 {fail(w,400,"Invalid credentials");return}
+ if s.limited(r,c.Email){fail(w,429,"Too many attempts");return}
  var u User;var stored string
  err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,role,must_change_password,password_hash FROM users WHERE (lower(email)=lower($1) OR (lower($1)='admin' AND lower(email)='admin@local.invalid')) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Role,&u.MustChange,&stored)
  if err!=nil||!verifyPassword(c.Password,stored){fail(w,401,"Invalid credentials");return}
@@ -80,8 +81,8 @@ func (s *Server) me(w http.ResponseWriter,r *http.Request) {
  respond(w,200,map[string]any{"user":u.data()})
 }
 func (s *Server) changePassword(w http.ResponseWriter,r *http.Request) {
- if s.limited(r){fail(w,429,"Too many attempts");return}
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
+ if s.limited(r,u.Email){fail(w,429,"Too many attempts");return}
  var c struct {CurrentPassword,NewPassword,SetupCode string}
  if asJSON(r,&c)!=nil||len(c.NewPassword)<16||len(c.NewPassword)>1024||c.NewPassword==c.CurrentPassword||c.NewPassword=="admin" {fail(w,400,"Choose a different password with at least 16 characters");return}
  var stored string
