@@ -27,19 +27,19 @@ For installation details, supported environments and known blockers see [INSTALL
 | Area | Current state |
 | --- | --- |
 | Workspace interface | React UI prototype imported |
-| Authentication and permissions | Go / PostgreSQL hardening work is in progress |
-| Administrator onboarding | First-login password change implementation is in progress |
-| Database | PostgreSQL deployment integration in progress |
-| REST API | Go backend implementation and CI work in progress |
-| HTTPS | Caddy TLS deployment integration in progress |
-| One-command installation | Ubuntu/Debian installer is under development |
+| Authentication and permissions | Go / PostgreSQL implementation merged; further security testing required |
+| Administrator onboarding | Initial setup-code and password-change implementation merged |
+| Database | PostgreSQL container bundled with application |
+| REST API | Go authentication/user-management API merged; broader APIs remain unimplemented |
+| HTTPS | Caddy HTTPS proxy bundled; real-domain certificate test outstanding |
+| One-command installation | Installer present on main; full fresh-host test outstanding |
 | Messaging and channels | Not production-ready |
 | Video calls and conferencing | Not production-ready |
 | Calendar and scheduling | Not production-ready |
 | MCP and extended integrations | Not implemented and verified |
 | Audit logging, backup, recovery, and MFA | Release blockers |
 
-**Do not interpret the UI prototype as a fully working service.** The back-end deployment and security work is being reviewed separately.
+**Do not interpret the UI prototype as a fully working service.** The existing backend and deployment foundation has been merged, but the broader service remains incomplete.
 
 ## Planned architecture
 
@@ -71,11 +71,11 @@ Docker is an **implementation detail** of the packaged runtime; users should not
 
 **The installer remains a development preview.** Do not deploy this branch on a production machine or assume a complete collaboration platform merely because its containers start.
 
-Review the implementation and tests in [production-hardening PR #2](https://github.com/Ceyeberkepp/NovaNexus/pull/2). That pull request is separate from the earlier UI import.
+The foundational Go/HTTPS installer changes were merged in [production-hardening PR #2](https://github.com/Ceyeberkepp/NovaNexus/pull/2).
 
 ## Initial administrator
 
-The work-in-progress installer provisions the requested first-login credentials:
+The development installer provisions the requested first-login credentials:
 
 - **Username:** `admin`
 - **Temporary password:** `admin`
@@ -95,7 +95,7 @@ npm run dev
 
 This runs the UI development server; it does **not** automatically deploy the Go API, PostgreSQL, or HTTPS and must **not** be exposed as a production workspace.
 
-The Go API, deployment stack, first-login authentication, and container smoke tests are tracked in [PR #2](https://github.com/Ceyeberkepp/NovaNexus/pull/2). The source files available on `main` may differ until that work is merged.
+The Go API, deployment stack, first-login authentication, and container smoke tests were merged through [PR #2](https://github.com/Ceyeberkepp/NovaNexus/pull/2). They are still not a complete production-ready collaboration system.
 
 ## Security and source licensing
 
@@ -108,7 +108,7 @@ Before production deployment:
 - Verify login, authorization, secret storage, backups, restoration, updates, and full TLS deployment.
 - Complete end-to-end testing for every advertised subsystem.
 
-See the [security and deployment work in PR #2](https://github.com/Ceyeberkepp/NovaNexus/pull/2).
+See the merged [security and deployment work in PR #2](https://github.com/Ceyeberkepp/NovaNexus/pull/2).
 
 ## Roadmap
 
