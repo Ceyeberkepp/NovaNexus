@@ -39,12 +39,10 @@ A one-command installer cannot override host networking or virtualization restri
 ## First-time administrator
 
 - Username: `admin`
-- Temporary password: `admin`
-- Separate high-entropy one-time setup code: printed by the installer and saved
-  in root-only `/opt/novanexus/.env`.
-- Before the dashboard unlocks, replace the temporary password with a
-  different password of at least 16 characters; existing sessions are revoked.
-- The known `admin/admin` combination is **rejected without the setup code**.
+- Temporary password: a unique, randomly generated password printed during installation and saved in the root-only `/opt/novanexus/.env`.
+- No separate setup code is required or shown in the Web GUI.
+- Before the dashboard unlocks, replace the temporary password with a different password of at least 16 characters; existing sessions are revoked.
+- The known `admin/admin` combination is not accepted.
 
 The temporary credentials are a compatibility convenience, not a replacement
 for an audited recovery policy and MFA. Avoid deploying them on the public
@@ -58,7 +56,7 @@ On a successfully installed server:
 sudo docker compose -f /opt/novanexus/docker-compose.yml --project-directory /opt/novanexus ps
 ```
 
-The installer itself checks `https://YOUR_DOMAIN/api/health` with a valid TLS
+The installer prints the **Web GUI** address (`https://SERVER_IP/`) and checks `https://SERVER_IP/api/health` with a valid TLS
 certificate. It will not silently downgrade to HTTP. TCP 80 is reserved for
 ACME HTTP challenges and HTTPS redirection.
 
