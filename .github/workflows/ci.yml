@@ -1,4 +1,6 @@
 name: NovaNexus CI
+permissions:
+  contents: read
 on:
   pull_request:
   push:
@@ -33,7 +35,7 @@ jobs:
       - name: Build frontend
         run: |
           npm install --no-audit --no-fund
-          npm run build
+          npm run check
       - name: Verify Go backend
         run: |
           go mod tidy
