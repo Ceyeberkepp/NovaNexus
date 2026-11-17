@@ -43,13 +43,13 @@ export default function CallNotifications({user,onJoin}){
  },[outgoing?.status,busy]);
  useEffect(()=>{poll();const i=setInterval(poll,2500);return()=>clearInterval(i)},[poll]);
  useEffect(()=>{
-  if(outgoing?.status==='accepted'){const room=outgoing.room,audioOnly=outgoing.audioOnly;setOutgoing(null);onJoin(room,{autoJoin:true,audioOnly})}
+  if(outgoing?.status==='accepted'){const room=outgoing.room,audioOnly=outgoing.audioOnly;setOutgoing(null);onJoin(room,{autoJoin:true,audioOnly,callId:outgoing.id})}
  },[outgoing?.status,outgoing?.room,outgoing?.audioOnly,onJoin]);
  const respond=async(action)=>{
   if(!incoming||busy)return;
   setBusy(true);setError('');
   try{const result=await callRequest({method:'POST',body:JSON.stringify({action,callId:incoming.id})});
-   if(action==='accept')onJoin(result.room,{autoJoin:true,audioOnly:incoming.audioOnly});
+   if(action==='accept')onJoin(result.room,{autoJoin:true,audioOnly:incoming.audioOnly,callId:incoming.id});
    setIncoming(null);
   }catch(e){setError(e.message);setIncoming(null)}
   finally{setBusy(false)}
