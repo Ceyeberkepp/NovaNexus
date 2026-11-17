@@ -141,6 +141,9 @@ jobs:
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/directory" | grep -q second@local.invalid
           curl -fsS -b /tmp/nova-cookie2 -X PUT -H "Content-Type: application/json" -d '{"workspaceName":"Development Workspace","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":false,"waitingRoomMessage":"Wait for your host","aiEnabled":true}' "$base/api/admin/settings" | grep -q true
           curl -fsS -b /tmp/nova-cookie2 "$base/api/workspace/settings" | grep -q "Development Workspace"
+          curl -fsS -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d '{"workspaceName":"Development Workspace","meetingPublicURL":"https://nexu.cyverax.com","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":false,"waitingRoomMessage":"Wait for your host","aiEnabled":true}' "$base/api/admin/settings" | grep -q true
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/workspace/settings" | grep -q 'nexu.cyverax.com'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d '{"workspaceName":"Development Workspace","meetingPublicURL":"http://unsecured.example.com","defaultMeetingLimit":25,"sessionMinutes":30,"waitingRoomEnabled":false,"waitingRoomMessage":"Wait","aiEnabled":true}' "$base/api/admin/settings")" = "400"
           curl -fsS -b /tmp/nova-cookie2 -H "Content-Type: application/json" -d '{"name":"Test Group","description":"Integration"}' "$base/api/admin/groups" | grep -q id
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/groups" | grep -q "Test Group"
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/logs" | grep -q settings.updated
