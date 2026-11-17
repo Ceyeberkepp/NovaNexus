@@ -1885,6 +1885,8 @@ function App() {
   const [meetingRoom, setMeetingRoom] = useState('');
   const [users, setUsers] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
+  const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
+  useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.settings?.workspace_name){setWorkspaceName(d.settings.workspace_name);document.title=d.settings.workspace_name;}}).catch(()=>{});},[user,currentTab]);
   const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
@@ -1969,7 +1971,7 @@ function App() {
             <div className="pt-8">
               <div className={`flex items-center px-6 pb-12 overflow-hidden`}>
                 <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-2xl shadow-lg shadow-indigo-200 shrink-0"><Command className="text-white" size={18} /></div>
-                {!sidebarCollapsed && <span className="ml-3 font-black text-lg tracking-tighter text-slate-900 uppercase">Nexus</span>}
+                {!sidebarCollapsed && <span className="ml-3 font-black text-lg tracking-tighter text-slate-900 truncate" title={workspaceName}>{workspaceName}</span>}
               </div>
               <nav className="px-3 space-y-1">
                 <NavItem icon={<LayoutGrid />} label="Overview" active={currentTab === 'dashboard'} onClick={() => setCurrentTab('dashboard')} collapsed={sidebarCollapsed} />
