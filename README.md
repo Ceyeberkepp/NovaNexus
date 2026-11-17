@@ -10,11 +10,19 @@ NovaNexus is being built as a secure, self-hosted environment for teams and admi
 
 > **Development preview — not production-certified.** This installs the implemented Go API, PostgreSQL, React frontend and HTTPS reverse proxy, but does not make unfinished video, messaging, calendar or MCP features functional. Review the script before running it with administrator privileges.
 
-**One command** on a fresh Ubuntu/Debian server:
+**One command** on a fresh Ubuntu/Debian server **after curl is installed**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /tmp/novanexus-install.sh && bash -n /tmp/novanexus-install.sh && sudo bash /tmp/novanexus-install.sh
 ```
+
+**Already logged in as root?** Omit `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh && bash -n /root/novanexus-install.sh && bash /root/novanexus-install.sh
+```
+
+Review the downloaded script before running it. On a minimal Debian system without curl, first run `apt update && apt install -y ca-certificates curl`. If Debian returns package `404 Not Found`, refresh stale APT metadata with `apt clean && rm -rf /var/lib/apt/lists/* && apt update`, then retry the package installation.
 
 The installer prompts for your public domain and TLS certificate email. It then automatically installs required system packages and Docker Compose, downloads the application, configures PostgreSQL and a Go API, builds the frontend, configures Caddy HTTPS and verifies `https://YOUR_DOMAIN/api/health`. **You do not need to install Docker, PostgreSQL, Go or Node manually.** A public DNS record and inbound ports 80/443 are prerequisites for trusted HTTPS; the installer cannot create your DNS entry or firewall rules automatically.
 
