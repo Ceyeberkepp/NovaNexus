@@ -1,0 +1,12 @@
+NovaNexus — Proprietary Software
+Copyright (c) 2026 NovaNexus. All rights reserved.
+
+No open-source license is granted for this repository.
+
+Unless the copyright owner separately gives written permission, no license
+to copy, modify, distribute, sublicense, or deploy this software is granted
+to third parties. Access to source code is not a grant of permission.
+
+Third-party dependencies remain subject to their respective licenses.
+This notice does not override the licenses of React, Go, PostgreSQL,
+Caddy, or any other third-party components.
