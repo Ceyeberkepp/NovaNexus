@@ -19,6 +19,7 @@ import (
  "sync"
  "time"
 
+ "github.com/jackc/pgx/v5"
  "github.com/jackc/pgx/v5/pgxpool"
  "golang.org/x/crypto/argon2"
 )
@@ -26,9 +27,9 @@ import (
 const cookieName = "novanexus_session"
 const sessionLifetime = 8*time.Hour
 
-type Server struct { db *pgxpool.Pool; secure bool; setupCode string; limitMu sync.Mutex; attempts map[string][]time.Time }
+type Server struct { db *pgxpool.Pool; secure bool; limitMu sync.Mutex; attempts map[string][]time.Time }
 type User struct { ID int64; Name, Email, Role string; MustChange bool }
-type credentials struct { Email, Password, SetupCode string }
+type credentials struct { Email, Password string }
 
 func randomHex(n int) string { b:=make([]byte,n); if _,err:=rand.Read(b);err!=nil {panic(err)};return hex.EncodeToString(b) }
 func tokenHash(s string) string { sum:=sha256.Sum256([]byte(s)); return hex.EncodeToString(sum[:]) }
@@ -70,7 +71,6 @@ func (s *Server) login(w http.ResponseWriter,r *http.Request) {
  var u User;var stored string
  err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,role,must_change_password,password_hash FROM users WHERE (lower(email)=lower($1) OR (lower($1)='admin' AND lower(email)='admin@local.invalid')) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Role,&u.MustChange,&stored)
  if err!=nil||!verifyPassword(c.Password,stored){fail(w,401,"Invalid credentials");return}
- if u.MustChange && (s.setupCode==""||subtle.ConstantTimeCompare([]byte(tokenHash(c.SetupCode)),[]byte(tokenHash(s.setupCode)))!=1){fail(w,401,"Initial setup code required");return}
  token:=randomHex(32)
  if _,e:=s.db.Exec(r.Context(),`INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,NOW()+INTERVAL '8 hours')`,tokenHash(token),u.ID);e!=nil {fail(w,500,"Unable to create session");return}
  http.SetCookie(w,cookie(token,s.secure,int(sessionLifetime.Seconds())))
@@ -83,11 +83,10 @@ func (s *Server) me(w http.ResponseWriter,r *http.Request) {
 func (s *Server) changePassword(w http.ResponseWriter,r *http.Request) {
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
  if s.limited(r,u.Email){fail(w,429,"Too many attempts");return}
- var c struct {CurrentPassword,NewPassword,SetupCode string}
+ var c struct {CurrentPassword,NewPassword string}
  if asJSON(r,&c)!=nil||len(c.NewPassword)<16||len(c.NewPassword)>1024||c.NewPassword==c.CurrentPassword||c.NewPassword=="admin" {fail(w,400,"Choose a different password with at least 16 characters");return}
  var stored string
  if e:=s.db.QueryRow(r.Context(),"SELECT password_hash FROM users WHERE id=$1",u.ID).Scan(&stored);e!=nil||!verifyPassword(c.CurrentPassword,stored) {fail(w,401,"Current password incorrect");return}
- if u.MustChange&&(s.setupCode==""||subtle.ConstantTimeCompare([]byte(tokenHash(c.SetupCode)),[]byte(tokenHash(s.setupCode)))!=1){fail(w,401,"Initial setup code required");return}
  tx,e:=s.db.Begin(r.Context());if e!=nil{fail(w,500,"Database unavailable");return};defer tx.Rollback(r.Context())
  if _,e=tx.Exec(r.Context(),"UPDATE users SET password_hash=$1,must_change_password=FALSE WHERE id=$2",passwordHash(c.NewPassword),u.ID);e!=nil{fail(w,500,"Password update failed");return}
  if _,e=tx.Exec(r.Context(),"DELETE FROM sessions WHERE user_id=$1",u.ID);e!=nil{fail(w,500,"Session revocation failed");return}
@@ -146,18 +145,27 @@ func main() {
  db,err:=pgxpool.New(ctx,os.Getenv("DATABASE_URL"));if err!=nil{log.Fatal(err)}
  if err=db.Ping(ctx);err!=nil{log.Fatal(err)}
  if err=migrate(ctx,db);err!=nil{log.Fatal(err)}
- s:=&Server{db:db,secure:os.Getenv("NODE_ENV")=="production",setupCode:os.Getenv("BOOTSTRAP_SETUP_CODE"),attempts:make(map[string][]time.Time)}
+ adminPassword:=os.Getenv("BOOTSTRAP_ADMIN_PASSWORD")
+ if len(adminPassword)<24 {log.Fatal("BOOTSTRAP_ADMIN_PASSWORD must be a unique randomly generated password of at least 24 characters")}
+ s:=&Server{db:db,secure:os.Getenv("NODE_ENV")=="production",attempts:make(map[string][]time.Time)}
  var count int
  if e:=db.QueryRow(ctx,"SELECT count(*) FROM users WHERE role='Admin'").Scan(&count);e!=nil{log.Fatal(e)}
  if count==0 {
-  switch {
-  case len(s.setupCode)>=24:
-   _,err=db.Exec(ctx,"INSERT INTO users(name,email,password_hash,role,must_change_password) VALUES('Administrator','admin@local.invalid',$1,'Admin',TRUE)",passwordHash("admin"))
-  case len(os.Getenv("BOOTSTRAP_ADMIN_EMAIL"))>0&&len(os.Getenv("BOOTSTRAP_ADMIN_PASSWORD"))>=20:
-   _,err=db.Exec(ctx,"INSERT INTO users(name,email,password_hash,role) VALUES('Administrator',lower($1),$2,'Admin')",os.Getenv("BOOTSTRAP_ADMIN_EMAIL"),passwordHash(os.Getenv("BOOTSTRAP_ADMIN_PASSWORD")))
-  default:log.Fatal("No valid bootstrap admin setup configured")
-  }
+  _,err=db.Exec(ctx,"INSERT INTO users(name,email,password_hash,role,must_change_password) VALUES('Administrator','admin@local.invalid',$1,'Admin',TRUE)",passwordHash(adminPassword))
   if err!=nil{log.Fatal(err)}
+ } else {
+  // Upgrade a pending legacy admin/admin + setup-code installation without exposing a default password.
+  // Once the password is changed, must_change_password is FALSE and this migration no longer applies.
+  var adminID int64
+  var stored string
+  e:=db.QueryRow(ctx,"SELECT id,password_hash FROM users WHERE email='admin@local.invalid' AND role='Admin' AND must_change_password=TRUE AND active=TRUE").Scan(&adminID,&stored)
+  if e==nil && !verifyPassword(adminPassword,stored) {
+   tx,te:=db.Begin(ctx);if te!=nil{log.Fatal(te)}
+   if _,te=tx.Exec(ctx,"UPDATE users SET password_hash=$1 WHERE id=$2 AND must_change_password=TRUE",passwordHash(adminPassword),adminID);te!=nil{_ =tx.Rollback(ctx);log.Fatal(te)}
+   if _,te=tx.Exec(ctx,"DELETE FROM sessions WHERE user_id=$1",adminID);te!=nil{_ =tx.Rollback(ctx);log.Fatal(te)}
+   if te=tx.Commit(ctx);te!=nil{log.Fatal(te)}
+   log.Println("Legacy pending administrator credentials upgraded to the installation password")
+  } else if e!=nil && !errors.Is(e,pgx.ErrNoRows) {log.Fatal(e)}
  }
  mux:=http.NewServeMux();mux.HandleFunc("/api/",s.api)
  dist:="dist"
