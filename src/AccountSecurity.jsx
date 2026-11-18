@@ -35,7 +35,7 @@ export default function AccountSecurity({user}){
    if(action==='begin'){setSetup(data);setNotice('Scan the QR code using your authenticator app, then confirm with its current six-digit code.')}
    if(action==='confirm'){setSetup(null);setEnabled(true);setRecovery(data.recoveryCodes||[]);setNotice('MFA is active. Save all recovery codes in a password manager; they will not be displayed again.')}
    if(action==='disable'){setEnabled(false);setRecovery([]);setSetup(null);setNotice('MFA disabled for your account.')}
-   setCode('');setPassword('');
+   setCode('');if(action!=='begin')setPassword('');
   }catch(e){setNotice(e.message)}
   finally{setBusy(false)}
  }
