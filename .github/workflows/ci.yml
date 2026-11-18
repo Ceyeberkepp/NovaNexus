@@ -36,6 +36,10 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+      - name: Verify installer port detection
+        run: |
+          bash -n scripts/install.sh
+          bash scripts/test-port-detection.sh
       - name: Build frontend
         run: |
           npm install --no-audit --no-fund
