@@ -135,6 +135,7 @@ func (s *Server) users(w http.ResponseWriter,r *http.Request) {
  if !validUsername(c.Username){fail(w,400,"Username must be 3–32 letters, numbers, underscores or hyphens");return}
  e=s.db.QueryRow(r.Context(),"INSERT INTO users(name,email,username,password_hash,role) VALUES($1,lower($2),$3,$4,'Regular') RETURNING id",strings.TrimSpace(c.Name),strings.TrimSpace(c.Email),c.Username,passwordHash(c.Password)).Scan(&id)
  if e!=nil{fail(w,409,"Unable to create user or email already in use");return}
+ s.audit(r,u.ID,"user.created",c.Username)
  respond(w,201,map[string]any{"user":(User{ID:id,Name:strings.TrimSpace(c.Name),Email:strings.ToLower(strings.TrimSpace(c.Email)),Username:c.Username,Role:"Regular"}).data()})
 }
 func (s *Server) api(w http.ResponseWriter,r *http.Request) {
