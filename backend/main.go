@@ -28,7 +28,7 @@ import (
 const cookieName = "novanexus_session"
 
 type Server struct { db *pgxpool.Pool; secure bool; limitMu sync.Mutex; attempts map[string][]time.Time }
-type User struct { ID int64; Name, Email, Username, Role string; MustChange bool; MFAEnabled bool }
+type User struct { ID int64; Name, Email, Username, Role string; JobTitle, Birthday, Avatar string; MustChange bool; MFAEnabled bool }
 type credentials struct { Email, Password, Code string }
 
 func validUsername(name string) bool {
@@ -60,12 +60,12 @@ func verifyPassword(p,stored string) bool {
 func respond(w http.ResponseWriter,status int,body any) {w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store");w.WriteHeader(status);_ =json.NewEncoder(w).Encode(body)}
 func fail(w http.ResponseWriter,code int,message string) {respond(w,code,map[string]any{"error":message})}
 func asJSON(r *http.Request,out any) error {r.Body=http.MaxBytesReader(nil,r.Body,16*1024);defer r.Body.Close();return json.NewDecoder(r.Body).Decode(out)}
-func (u User) data() map[string]any {return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email,"username":u.Username,"role":u.Role,"mfa_enabled":u.MFAEnabled,"must_change_password":u.MustChange}}
+func (u User) data() map[string]any {return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email,"username":u.Username,"role":u.Role,"jobTitle":u.JobTitle,"birthday":u.Birthday,"avatar":u.Avatar,"mfa_enabled":u.MFAEnabled,"must_change_password":u.MustChange}}
 func cookie(token string,secure bool,maxAge int) *http.Cookie {return &http.Cookie{Name:cookieName,Value:token,Path:"/",HttpOnly:true,Secure:secure,SameSite:http.SameSiteStrictMode,MaxAge:maxAge}}
 func (s *Server) who(r *http.Request) (User,error) {
  c,err:=r.Cookie(cookieName);if err!=nil||len(c.Value)!=64{return User{},errors.New("not authenticated")}
  var u User
- err=s.db.QueryRow(r.Context(),`SELECT u.id,u.name,u.email,u.username,u.role,u.must_change_password,u.mfa_enabled FROM sessions ss JOIN users u ON ss.user_id=u.id WHERE ss.token_hash=$1 AND ss.expires_at>NOW() AND u.active=TRUE`,tokenHash(c.Value)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&u.MFAEnabled)
+ err=s.db.QueryRow(r.Context(),`SELECT u.id,u.name,u.email,u.username,u.role,u.must_change_password,u.mfa_enabled,COALESCE(u.job_title,''),COALESCE(u.birthday,''),COALESCE(u.avatar,'') FROM sessions ss JOIN users u ON ss.user_id=u.id WHERE ss.token_hash=$1 AND ss.expires_at>NOW() AND u.active=TRUE`,tokenHash(c.Value)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&u.MFAEnabled,&u.JobTitle,&u.Birthday,&u.Avatar)
  return u,err
 }
 func (s *Server) limited(r *http.Request, account string) bool {
@@ -167,6 +167,7 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/auth/mfa":s.mfaAPI(w,r)
  case "/api/auth/login":if r.Method=="POST"{s.login(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/auth/me":if r.Method=="GET"{s.me(w,r)}else{fail(w,405,"Method not allowed")}
+ case "/api/account/profile":s.profileAPI(w,r)
  case "/api/auth/logout":if r.Method=="POST"{s.logout(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/auth/change-password":if r.Method=="POST"{s.changePassword(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/users":if r.Method=="GET"||r.Method=="POST"{s.users(w,r)}else{fail(w,405,"Method not allowed")}
@@ -181,6 +182,9 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "UPDATE users SET username = CASE WHEN email='admin@local.invalid' THEN 'admin' ELSE 'user'||id::text END WHERE username IS NULL",
   "CREATE UNIQUE INDEX IF NOT EXISTS users_username_ci_unique ON users(lower(username))",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS birthday TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_pending_secret TEXT",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_last_step BIGINT NOT NULL DEFAULT 0",
