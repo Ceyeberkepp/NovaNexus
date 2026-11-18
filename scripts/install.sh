@@ -423,7 +423,7 @@ printf "\n==========================================\n"
 printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
 printf "Cloudflare Tunnel origin (same as local GUI): https://%s/\n" "$NOVANEXUS_DOMAIN"
 printf "Cloudflare origin CA certificate (for local IP certificates): %s\n" "$CA_FILE"
-printf "Cloudflare route: HTTPS to %s:443; no second IP or port. Trust the local CA on cloudflared's host.\n" "$NOVANEXUS_DOMAIN"
+printf "Cloudflare route: HTTPS to %s:443; no second IP or port. Leave HTTP Host Header blank; trust the local CA on cloudflared's host.\n" "$NOVANEXUS_DOMAIN"
 printf "Run origin diagnostics: bash %s/scripts/check-cloudflare-origin.sh\n" "$ROOT_DIR"
 if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]];then
   log "Existing service owns TCP 80. NovaNexus uses host HTTP port $NOVANEXUS_HTTP_PORT; the HTTPS GUI stays on port 443."
@@ -432,6 +432,14 @@ if [[ -n "$NOVANEXUS_TUNNEL_DOMAIN" ]];then
   printf "Tunnel public URL (requires your tunnel provider routing): https://%s/\n" "$NOVANEXUS_TUNNEL_DOMAIN"
 fi
 printf "==========================================\n"
+# Validate Cloudflare's default Host header against the same HTTPS origin.
+# Do not require manual HTTP Host Header settings in the tunnel dashboard.
+TUNNEL_TEST_HOST="${NOVANEXUS_TUNNEL_DOMAIN:-tunnel-origin-check.example.invalid}"
+if ! TUNNEL_TEST_RESULT=$(curl "${CURL_OPTIONS[@]}" "${CURL_CA[@]}" -H "Host: $TUNNEL_TEST_HOST" "$HEALTH_URL" 2>&1); then
+  fail "Tunnel public Host header did not route on HTTPS: $TUNNEL_TEST_RESULT"
+fi
+[[ "$TUNNEL_TEST_RESULT" == *'"status":"ok"'* ]] || fail "Tunnel public Host header returned unexpected content."
+log "Verified default Cloudflare Host header routing; HTTP Host Header override is not required."
 log "The local HTTPS endpoint passed its certificate and API checks. LAN reachability depends on your network/firewall."
 if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
   printf "Public Web GUI (after DNS + router setup): https://%s/\n" "$NOVANEXUS_PUBLIC_DOMAIN"
