@@ -1,6 +1,7 @@
 import React, {useEffect,useRef,useState} from 'react';
 import {LiveKitRoom, useRoomContext} from '@livekit/components-react';
 import ConferenceStage from './ConferenceStage';
+import {liveKitSignalingOrigin} from './meeting-origin.mjs';
 import VideoSettings from './VideoSettings';
 import MeetingExtras from './MeetingExtras';
 import {readChatPreferences} from './ChatPreferences';
@@ -50,8 +51,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       // Cloudflare Tunnel overrides upstream Host to the appliance IP,
       // which must not be returned as a WebSocket destination to public
       // participants. Caddy proxies /rtc at this browser origin.
-      const browserProtocol=window.location.protocol==='https:'?'wss:':'ws:';
-      setConnection({...data,serverUrl:browserProtocol+'//'+window.location.host});
+      setConnection({...data,serverUrl:liveKitSignalingOrigin(window.location)});
     }catch(err){setError(err.message||'Video connection unavailable');}
     finally{setLoading(false);}
   }
