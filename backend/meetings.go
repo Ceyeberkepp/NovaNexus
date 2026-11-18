@@ -42,12 +42,13 @@ func (s *Server) meetingTokenAPI(w http.ResponseWriter,r *http.Request){
  if u.MustChange{fail(w,403,"Password change required");return}
  key,secret:=os.Getenv("LIVEKIT_API_KEY"),os.Getenv("LIVEKIT_API_SECRET")
  if key==""||len(secret)<32{fail(w,503,"Video service not configured");return}
- var request struct{Room string;MaxParticipants int;BreakoutID int64}
+ var request struct{Room string;Password string;MaxParticipants int;BreakoutID int64}
  if asJSON(r,&request)!=nil{fail(w,400,"Invalid meeting request");return}
  request.Room=strings.TrimSpace(request.Room)
  if !eightDigitRoom.MatchString(request.Room){fail(w,400,"Meeting ID must be exactly eight digits");return}
- var host int64;var kind string
- if e=s.db.QueryRow(r.Context(),"SELECT owner_id,kind FROM meeting_rooms WHERE room=$1 AND closed=FALSE",request.Room).Scan(&host,&kind);e!=nil{fail(w,404,"Meeting number not found");return}
+ var host int64;var kind,guestHash string
+ if e=s.db.QueryRow(r.Context(),"SELECT owner_id,kind,guest_password_hash FROM meeting_rooms WHERE room=$1 AND closed=FALSE",request.Room).Scan(&host,&kind,&guestHash);e!=nil{fail(w,404,"Meeting number not found");return}
+ if kind=="normal"&&u.ID!=host&&guestHash!=""&&(len(request.Password)>128||!verifyPassword(request.Password,guestHash)){fail(w,403,"Meeting password is incorrect");return}
  if kind=="call"&&u.ID!=host{
   var allowed bool
   e=s.db.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM direct_calls WHERE room=$1 AND recipient_id=$2 AND status='accepted')",request.Room,u.ID).Scan(&allowed)
