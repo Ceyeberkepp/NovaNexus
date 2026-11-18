@@ -74,7 +74,7 @@ const NavItem = ({ icon, label, active, onClick, collapsed }) => (
 );
 
 // --- AUTH SCREEN ---
-const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
+const AuthScreen = ({ setUser, setView, prefilledRoom, onGuestJoin }) => {
   const [email, setEmail] = useState(''); 
   const [password, setPassword] = useState('');
   const [mfaPending,setMfaPending]=useState(false);
@@ -83,13 +83,14 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
   useEffect(()=>{let live=true;fetch('/api/branding').then(r=>r.json()).then(d=>{if(live&&d.branding){setBranding(d.branding);document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});return()=>{live=false;};},[]);
   const [activeTab, setActiveTab] = useState('login'); 
   const [guestName, setGuestName] = useState('');
+  const [guestPassword,setGuestPassword] = useState('');
   const [meetingId, setMeetingId] = useState(prefilledRoom || '');
   const [loading, setLoading] = useState(false);
 
   // Update state when props change (for deep linking)
   useEffect(() => {
     if (prefilledRoom) {
-      setActiveTab('login');
+      setActiveTab('join');
       setMeetingId(prefilledRoom);
     }
   }, [prefilledRoom]);
@@ -100,7 +101,18 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
     setAuthError('');
     if (activeTab === 'join') {
       if(!/^[0-9]{8}$/.test(meetingId)){setAuthError('Enter an 8-digit meeting number.');return;}
-      window.location.assign('/'+meetingId);
+      if(guestName.trim().length<2){setAuthError('Enter your name to join as a guest.');return;}
+      setLoading(true);
+      try {
+        const response=await fetch('/api/meetings/guest-token',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({room:meetingId,name:guestName.trim(),password:guestPassword})
+        });
+        const data=await response.json();
+        if(!response.ok)throw new Error(data.error||'Unable to join as guest');
+        onGuestJoin(meetingId,guestName.trim(),data);
+      }catch(error){setAuthError(error.message||'Unable to join as guest');}
+      finally{setLoading(false);}
       return;
     }
     setLoading(true);
@@ -138,7 +150,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
             <button onClick={() => setActiveTab('login')} className={`flex-1 py-4 text-sm font-bold transition-all border-b-2 ${activeTab === 'login' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}>Member Login</button>
         </div>
 
-        {prefilledRoom && <div className="mx-7 mt-4 rounded-xl bg-indigo-50 p-3 text-xs text-indigo-800">Sign in to join meeting <strong>{prefilledRoom}</strong>. Guest access is not yet enabled.</div>}
+        {prefilledRoom && <div className="mx-7 mt-4 rounded-xl bg-indigo-50 p-3 text-xs text-indigo-800">Join meeting <strong>{prefilledRoom}</strong> as a guest using your name; no account required.</div>}
         {authError && <p role="alert" className="mx-8 mt-4 text-sm text-red-700">{authError}</p>}
               {/* Form Section */}
         <div className="p-8 pt-8">
@@ -146,14 +158,20 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
             {activeTab === 'join' ? (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     <div>
-                        <div className="text-xs text-slate-500 mb-2">Enter the meeting ID, then sign in with your member account. Anonymous guest access is not enabled.</div>
+                        <div className="text-xs text-slate-500 mb-2">Join by meeting ID or direct link. Enter your name and the meeting password if one is set. No account needed.</div>
 
                     </div>
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Meeting ID</label>
                         <input type="text" placeholder="123-456-789" value={meetingId} className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-200 transition-all placeholder:text-slate-300" onChange={e => setMeetingId(e.target.value)} />
                     </div>
-                    <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">Continue to Member Sign In</button>
+                    <label className="block text-xs font-bold text-slate-600">Your name
+                      <input type="text" maxLength={80} required value={guestName} onChange={e=>setGuestName(e.target.value)} placeholder="Guest display name" className="mt-2 w-full rounded-xl border border-slate-200 p-3"/>
+                    </label>
+                    <label className="block text-xs font-bold text-slate-600">Meeting password (if required)
+                      <input type="password" autoComplete="off" value={guestPassword} onChange={e=>setGuestPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3"/>
+                    </label>
+                    <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">{loading?'Joining...':'Join as Guest'}</button>
                 </div>
             ) : (
                 <div className="space-y-6 animate-in slide-in-from-left-4 duration-300">
@@ -1826,6 +1844,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [meetingRoom, setMeetingRoom] = useState(()=>/^\/[0-9]{8}\/?$/.test(window.location.pathname)?window.location.pathname.replaceAll('/',''):'');
   const [meetingOptions,setMeetingOptions]=useState({autoJoin:false,audioOnly:false,callId:null});
+  const [guestConnection,setGuestConnection]=useState(null);
   const [users, setUsers] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
@@ -1915,6 +1934,15 @@ function App() {
       setView('meeting');
   };
 
+  const handleGuestJoin=(room,name,data)=>{
+    setGuestConnection(data);
+    setUser({id:null,name,isGuest:true});
+    setMeetingRoom(room);
+    window.history.pushState({},'','/'+room);
+    setMeetingOptions({autoJoin:false,audioOnly:false,callId:null});
+    setView('meeting');
+  };
+
   const handleUpdateProfile = (updatedUser) => {
       setUser(updatedUser);
   };
@@ -1932,6 +1960,7 @@ function App() {
       window.history.replaceState({},'','/');
       setMeetingOptions({autoJoin:false,audioOnly:false,callId:null});
       if (user?.isGuest) {
+          setGuestConnection(null);
           setUser(null);
           setView('auth');
       } else {
@@ -1942,8 +1971,8 @@ function App() {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center" role="status">Checking your session...</div>;
   if (view === 'change-password') return <ChangeInitialPassword onComplete={() => {setUser(null);setView('auth');}} />;
   if (user?.terms_required||view === 'terms') return <TermsConsent onAccepted={(updated)=>{setUser(updated);setView('dashboard')}} onSignOut={async()=>{try{await signOut()}finally{setUser(null);setView('auth')}}}/>;
-  if (view === 'auth') return <AuthScreen setUser={setUser} setView={setView} prefilledRoom={meetingRoom} />;
-  if (view === 'meeting') return <MeetingRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} autoJoin={meetingOptions.autoJoin} audioOnly={meetingOptions.audioOnly} />; 
+  if (view === 'auth') return <AuthScreen setUser={setUser} setView={setView} prefilledRoom={meetingRoom} onGuestJoin={handleGuestJoin} />;
+  if (view === 'meeting') return <MeetingRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} autoJoin={meetingOptions.autoJoin} audioOnly={meetingOptions.audioOnly} initialConnection={guestConnection} />; 
 
   return (
     // ... existing layout code ...
