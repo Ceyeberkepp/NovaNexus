@@ -394,6 +394,23 @@ if [[ "$verified" != true ]]; then
   docker compose logs --tail=60 https app db >&2 || true
   fail "Local HTTPS health verification failed. Proxy settings, certificate mismatch or application health may be responsible; inspect the error above."
 fi
+# Verify the HTTP origin intended for a local tunnel agent.
+# It is bound to 127.0.0.1 by Docker Compose and never requires port 80.
+TUNNEL_ORIGIN_VERIFIED=false
+for tunnel_attempt in 1 2 3 4 5; do
+  if curl --noproxy "*" --fail --silent --show-error --connect-timeout 3 --max-time 7 "http://127.0.0.1:$NOVANEXUS_TUNNEL_PORT/api/health" 2>/dev/null | grep -q '"status":"ok"'; then
+    TUNNEL_ORIGIN_VERIFIED=true
+    break
+  fi
+  sleep 2
+done
+if [[ "$TUNNEL_ORIGIN_VERIFIED" == true ]]; then
+  log "Local tunnel origin passed its API health check."
+elif [[ -n "$NOVANEXUS_TUNNEL_DOMAIN" ]]; then
+  fail "Configured tunnel origin is not healthy on loopback port $NOVANEXUS_TUNNEL_PORT."
+else
+  log "WARNING: Optional loopback tunnel origin did not pass verification."
+fi
 # A local loopback request verifies that Caddy can present a publicly trusted
 # certificate for the optional hostname. This is NOT an outside-network test.
 PUBLIC_HTTPS_VERIFIED=false
