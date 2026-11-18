@@ -42,9 +42,9 @@ jobs:
           docker compose config --quiet
           test -f Dockerfile
           test -f Caddyfile
-          test -s public/nexus-workspace-logo.webp
-          grep -q "/nexus-workspace-logo.webp" index.html
-          grep -q "/nexus-workspace-logo.webp" src/App.jsx
+          test -s public/nexus-workspace-logo.svg
+          grep -q "/nexus-workspace-logo.svg" index.html
+          grep -q "/nexus-workspace-logo.svg" src/App.jsx
       - name: Build non-root Go API image
         run: docker compose build app
       - name: Start PostgreSQL and Go API
