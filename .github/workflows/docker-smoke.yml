@@ -136,7 +136,7 @@ jobs:
           set -euo pipefail
           bash -n scripts/check-cloudflare-origin.sh
           temp_root="$(mktemp -d)"
-          printf 'NOVANEXUS_DOMAIN=127.0.0.1\\nNOVANEXUS_BIND_IP=127.0.0.1\\nNOVANEXUS_TUNNEL_PORT=18081\\n' > "$temp_root/.env"
+          printf '%s\n' 'NOVANEXUS_DOMAIN=127.0.0.1' 'NOVANEXUS_BIND_IP=127.0.0.1' 'NOVANEXUS_TUNNEL_PORT=18081' > "$temp_root/.env"
           cp /tmp/novanexus-local-ca.crt "$temp_root/novanexus-local-root-ca.crt"
           NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh | grep -q 'PASS: HTTPS origin'
           rm -rf "$temp_root"
