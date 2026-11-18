@@ -165,8 +165,9 @@ export default function AdminConsole({users,setUsers,initialTab='users',user}){
          </div>
          <div className="flex min-h-[420px] items-center justify-center overflow-hidden rounded-[2.5rem] bg-zinc-900 p-8">
           <div className="w-full max-w-[270px] rounded-2xl border border-white/10 bg-white/10 p-8 text-center text-white shadow-xl">
-           <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-600">{settings.waiting_logo?<img src={settings.waiting_logo} className="h-full w-full object-contain" alt="Meeting logo"/>:<Calendar size={24}/>}</div>
-           <div className="mb-2 text-base font-black">{settings.workspace_name||'NovaNexus Workspace'}</div>
+           {settings.waiting_logo
+              ? <img src={settings.waiting_logo} className="mx-auto mb-6 h-20 w-full max-w-[220px] object-contain" alt={settings.workspace_name||'NovaNexus Workspace'}/>
+              : <div className="mb-6 text-base font-black">{settings.workspace_name||'NovaNexus Workspace'}</div>}
            {settings.waiting_room_enabled==='true'?<><p className="mb-5 text-[10px] font-black uppercase tracking-widest text-indigo-200">Waiting for host</p><p className="text-xs text-zinc-300">{settings.waiting_room_message}</p></>:<div className="py-7 text-xs font-black uppercase text-zinc-500">Waiting room disabled</div>}
            <div className="mt-6 text-[9px] uppercase tracking-widest text-zinc-400">Preview only</div>
           </div>
@@ -178,7 +179,7 @@ export default function AdminConsole({users,setUsers,initialTab='users',user}){
             <div><h3 className="text-xl font-black text-slate-900">Identity &amp; Assets</h3><p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">Customize your conference appearance</p></div>
             <span className="rounded-xl bg-indigo-50 p-3 text-indigo-600"><ImageIcon size={21}/></span>
           </div>
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Workspace Name<input className={input+' mt-3'} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label>
+          <p className="text-xs text-slate-500">A saved logo image replaces the workspace name in that location. Remove the image to show the name again; never display both.</p><label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Workspace Name<input className={input+' mt-3'} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[['site_logo','Site Logo','Workspace navigation'],['login_logo','Login Screen','Sign-in screen logo'],['favicon','Favicon','Browser tab icon'],['waiting_logo','Waiting Room','Meeting entry logo']].map(([key,label,description])=>
               <div key={key} className="flex min-h-[220px] flex-col items-center rounded-[1.7rem] border border-slate-100 bg-slate-50/80 p-5 text-center hover:border-indigo-200">
