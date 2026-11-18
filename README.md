@@ -33,6 +33,18 @@ The **Calls** sidebar button opens a Teams-inspired calling workspace, retaining
 - **Chat appearance:** Chat Settings → Display preserves the original themes and now adds solid, aurora, dots, grid and waves backgrounds.
 - **Password reset:** Admin → Users lets an administrator choose and confirm a new password of at least eight characters (no generated password), after confirming the administrator's own password. Previous sessions are revoked and the member must change that password at next sign-in.
 
+### Automatic port fallback and tunnel origins
+
+The one-click installer checks whether TCP port **80** is occupied. If it is, NovaNexus leaves the existing service untouched and automatically chooses an available HTTP host port (normally **8080**, otherwise 8081, 8880, or 18080). HTTPS remains available at `https://SERVER_IP` on port **443**. If **443** is already occupied, the installer stops with a specific explanation instead of claiming that HTTP can replace HTTPS.
+
+A tunnel client installed **on the NovaNexus server itself** can point to `http://127.0.0.1:18081` (or the alternative loopback port selected and printed by the installer). This origin listens on localhost only, not a public network interface. It supports the web interface, auth, chat APIs, and WebSocket signaling. Set `NOVANEXUS_TUNNEL_DOMAIN=nexu.cyverax.com` to have meeting invitations use the HTTPS hostname supplied by your tunnel provider. Your tunnel client, DNS record, and public HTTPS endpoint must still be configured with that provider; the installer never claims to have created them.
+
+For a tunnel agent **on another computer in your LAN**, use the LAN origin `https://SERVER_IP:443` with the certificate authority trusted by that agent. Do not use the localhost-only tunnel origin remotely. A public hostname and HTTPS tunnel do not, on their own, transport LiveKit WebRTC UDP media. Configure publicly reachable media ports or a TURN relay separately.
+
+### Real MFA and user identity
+
+The Admin Users screen allows assigning a **username** (3–32 lowercase letters, digits, underscores, or hyphens) as well as name and email. The login screen accepts either the username or email. Users can activate **authenticator-app TOTP** from **Account Security** and receive ten single-use recovery codes; sign-in requires the code after the account password. Keep recovery codes somewhere safe. Administrator password resets do not silently disable MFA.
+
 ### Access from both LAN and the internet
 
 The installer now supports **both local-IP HTTPS and an optional public HTTPS hostname** on the same installation. Existing users, meetings, and PostgreSQL volumes are preserved on upgrade. On a default LAN installation, the GUI remains at `https://10.5.5.51/` (replace with your actual server IP). If you supply `NOVANEXUS_PUBLIC_DOMAIN=nexu.cyverax.com` when installing or upgrading, Caddy also serves `https://nexu.cyverax.com/` with automatic publicly trusted TLS, provided the domain's DNS and inbound HTTP/HTTPS work.
