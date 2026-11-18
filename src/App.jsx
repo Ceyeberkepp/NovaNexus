@@ -128,7 +128,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
         <div className="pt-10 pb-6 text-center">
             {branding.login_logo
               ? <img src={branding.login_logo} alt={branding.workspace_name||'Nexus Workspace'} className="mx-auto mb-5 block h-24 w-full max-w-[280px] object-contain"/>
-              : <img src="/nexus-workspace-logo.svg" alt="Nexus Workspace by Nova" className="mx-auto mb-5 block h-24 w-full max-w-[280px] object-contain"/>}
+              : <img src="/nexus-workspace-logo.webp" alt="Nexus Workspace by Nova" className="mx-auto mb-5 block h-24 w-full max-w-[280px] object-contain"/>}
             <p className="text-slate-500 text-sm font-medium">Connect, Collaborate, Create.</p>
         </div>
 
@@ -1829,7 +1829,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
-  const [siteLogo,setSiteLogo] = useState('/nexus-workspace-logo.svg');
+  const [siteLogo,setSiteLogo] = useState('/nexus-workspace-logo.webp');
   const [visibleSiteLogo,setVisibleSiteLogo] = useState('');
   // Older square logo uploads may contain substantial transparent padding.
   // Trim only transparent edges at display time so existing saved logos fill the navigation header.
@@ -1864,7 +1864,7 @@ function App() {
   },[siteLogo]);
   const [brandingVersion,setBrandingVersion] = useState(0);
   useEffect(()=>{const refresh=()=>setBrandingVersion(v=>v+1);window.addEventListener('novanexus:branding-changed',refresh);return()=>window.removeEventListener('novanexus:branding-changed',refresh);},[]);
-  useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/branding',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.branding){setWorkspaceName(d.branding.workspace_name||'NovaNexus Workspace');setSiteLogo(d.branding.site_logo||'/nexus-workspace-logo.svg');document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});},[user,currentTab,brandingVersion]);
+  useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/branding',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.branding){setWorkspaceName(d.branding.workspace_name||'NovaNexus Workspace');setSiteLogo(d.branding.site_logo||'/nexus-workspace-logo.webp');document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});},[user,currentTab,brandingVersion]);
   const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
