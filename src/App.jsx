@@ -125,10 +125,9 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
         
         {/* Branding Header */}
         <div className="pt-10 pb-6 text-center">
-            <div className="bg-indigo-600 w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-indigo-200">
-                {branding.login_logo?<img src={branding.login_logo} alt="Workspace login logo" className="h-full w-full object-contain rounded-2xl"/>:<Command size={32} className="text-white"/>}
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">{branding.workspace_name||"Nexus Workspace"}</h1>
+            {branding.login_logo
+              ? <img src={branding.login_logo} alt={branding.workspace_name||'Nexus Workspace'} className="mx-auto mb-5 block h-24 w-full max-w-[280px] object-contain"/>
+              : <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-5">{branding.workspace_name||"Nexus Workspace"}</h1>}
             <p className="text-slate-500 text-sm font-medium">Connect, Collaborate, Create.</p>
         </div>
 
@@ -1931,8 +1930,9 @@ function App() {
             </button>
             <div className="pt-8">
               <div className={`flex items-center px-6 pb-12 overflow-hidden`}>
-                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2.5 rounded-2xl shadow-lg shadow-indigo-200 shrink-0">{siteLogo?<img src={siteLogo} alt="Site Logo" className="h-7 w-7 object-contain rounded-xl"/>:<Command className="text-white" size={18} />}</div>
-                {!sidebarCollapsed && <span className="ml-3 font-black text-lg tracking-tighter text-slate-900 truncate" title={workspaceName}>{workspaceName}</span>}
+                {siteLogo
+                  ? <img src={siteLogo} alt={workspaceName} title={workspaceName} className={`max-h-14 w-full object-contain object-left ${sidebarCollapsed?'max-w-9':'max-w-[200px]'}`}/>
+                  : <span className={`font-black tracking-tight text-slate-900 truncate ${sidebarCollapsed?'text-base':'text-lg'}`} title={workspaceName}>{sidebarCollapsed?(workspaceName||'N').slice(0,2):workspaceName}</span>}
               </div>
               <nav className="px-3 space-y-1">
                 <NavItem icon={<LayoutGrid />} label="Overview" active={currentTab === 'dashboard'} onClick={() => setCurrentTab('dashboard')} collapsed={sidebarCollapsed} />
