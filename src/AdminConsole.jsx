@@ -150,7 +150,30 @@ export default function AdminConsole({users,setUsers}){
           </div>
          </div>
         </div>:
-        <><label className="block text-sm">Workspace name<input className={input} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label><div className="grid gap-4">{[['site_logo','Site Logo'],['login_logo','Login Screen Logo'],['favicon','Favicon'],['waiting_logo','Waiting Room Logo']].map(([key,label])=><div key={key} className="rounded-xl border p-4 space-y-3"><div className="font-semibold text-sm">{label}</div>{settings[key]&&<img src={settings[key]} alt={label} className="max-h-20 max-w-40 object-contain"/>}<label className="block text-xs font-semibold text-indigo-700 cursor-pointer">Upload image (PNG, JPEG, WebP, max 128 KB)<input className="block mt-2 text-xs" accept="image/png,image/jpeg,image/webp" type="file" onChange={e=>uploadBranding(e,key)}/></label>{settings[key]&&<button type="button" className="text-xs text-rose-700 font-semibold" onClick={()=>clearBranding(key)}>Remove image</button>}</div>)}</div><p className="text-xs text-slate-500">The uploaded assets are validated and saved on the server. Login and browser branding update after refresh.</p></>}
+
+        <div className="space-y-7">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-5">
+            <div><h3 className="text-xl font-black text-slate-900">Identity &amp; Assets</h3><p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">Customize your conference appearance</p></div>
+            <span className="rounded-xl bg-indigo-50 p-3 text-indigo-600"><ImageIcon size={21}/></span>
+          </div>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Workspace Name<input className={input+' mt-3'} minLength={2} maxLength={80} required value={settings.workspace_name} onChange={e=>setSettings({...settings,workspace_name:e.target.value})}/></label>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[['site_logo','Site Logo','Workspace navigation'],['login_logo','Login Screen','Sign-in screen logo'],['favicon','Favicon','Browser tab icon'],['waiting_logo','Waiting Room','Meeting entry logo']].map(([key,label,description])=>
+              <div key={key} className="flex min-h-[220px] flex-col items-center rounded-[1.7rem] border border-slate-100 bg-slate-50/80 p-5 text-center hover:border-indigo-200">
+                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-white text-indigo-500 shadow-sm">
+                  {settings[key]?<img src={settings[key]} alt={label} className="max-h-16 max-w-16 object-contain"/>:<ImageIcon size={26}/>}
+                </div>
+                <h4 className="text-xs font-black text-slate-800">{label}</h4>
+                <p className="mt-1 text-[10px] text-slate-400">{description}</p>
+                <label className="mt-auto cursor-pointer rounded-lg bg-white px-4 py-2 text-[10px] font-bold text-indigo-700 shadow-sm hover:bg-indigo-50">
+                  {settings[key]?'Replace image':'Upload image'}
+                  <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={e=>uploadBranding(e,key)}/>
+                </label>
+                {settings[key]&&<button type="button" className="mt-2 text-[10px] font-bold text-rose-600" onClick={()=>clearBranding(key)}>Remove</button>}
+              </div>)}
+          </div>
+          <p className="text-xs text-slate-500">PNG, JPEG, or WebP, maximum 128 KB. All assets are saved to the real workspace; no demonstration logos are inserted.</p>
+        </div>
       <button className={btn+' flex items-center gap-2'} disabled={loading}><Save size={16}/> Save changes</button>
     </form>}
     {tab==='ai'&&<form onSubmit={saveSettings} className="max-w-3xl space-y-6 rounded-[2.5rem] border border-slate-100 bg-white p-9 shadow-sm"><div className="flex items-center gap-4"><div className="rounded-2xl bg-indigo-50 p-4 text-indigo-600"><Sparkles size={25}/></div><div><h2 className="text-xl font-black">AI Assistant</h2><p className="text-[11px] uppercase tracking-widest text-slate-400">Private and self-hosted</p></div></div><label className="flex items-center justify-between gap-4 text-sm font-semibold">Enable Nexus AI for members <input type="checkbox" checked={settings.ai_enabled==='true'} onChange={e=>setSettings({...settings,ai_enabled:String(e.target.checked)})} className="h-5 w-5 accent-indigo-600"/></label><p className="text-xs leading-relaxed text-slate-500">Uses a small local model. No external API key required. AI cannot edit accounts or read private messages and its answers may be inaccurate.</p><button className={btn} disabled={loading}>Save AI settings</button></form>}
