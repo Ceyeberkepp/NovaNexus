@@ -46,7 +46,12 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'Unable to join meeting');
       setActiveBreakoutId(breakoutID);
-      setConnection(data);
+      // Use the hostname visible to the participant's browser. The
+      // Cloudflare Tunnel overrides upstream Host to the appliance IP,
+      // which must not be returned as a WebSocket destination to public
+      // participants. Caddy proxies /rtc at this browser origin.
+      const browserProtocol=window.location.protocol==='https:'?'wss:':'ws:';
+      setConnection({...data,serverUrl:browserProtocol+'//'+window.location.host});
     }catch(err){setError(err.message||'Video connection unavailable');}
     finally{setLoading(false);}
   }
@@ -68,8 +73,8 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       connect={true}
       audio={audioOnly?true:(prefs.callMicEnabled===false?false:{echoCancellation:prefs.callEchoCancellation!==false,noiseSuppression:prefs.callNoiseSuppression!==false,...(prefs.callAudioDevice?{deviceId:prefs.callAudioDevice}:{})})}
       video={audioOnly?false:prefs.callCamEnabled===false?false:{resolution:({ '360p':{width:640,height:360}, '720p':{width:1280,height:720}, '1080p':{width:1920,height:1080}}[prefs.callQuality]||{width:1280,height:720}),...(prefs.callVideoDevice?{deviceId:prefs.callVideoDevice}:{})}}
-      onDisconnected={()=>{if(!switchingRef.current)leave();}}
-      onError={(e)=>setError(e?.message||'Connection failed')}
+      onDisconnected={()=>{if(!switchingRef.current){setConnection(null);setError('Call disconnected. Check your network connection or try joining again.');}}}
+      onError={(e)=>{setConnection(null);setError(e?.message||'Unable to connect to the meeting server. Check HTTPS, WebSocket and media connectivity.')}}
       style={{height:'100%'}}>
       <ConferenceStage roomId={roomId} onEnd={leave}/>
       <MeetingExtras shareUrl={shareUrl} roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>
