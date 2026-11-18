@@ -38,6 +38,14 @@ The **Calls** sidebar button opens a Teams-inspired calling workspace, retaining
 
 **No sample users, fabricated presence or simulated call history are used in this Calls workspace.** When no calls have occurred, the list is empty. The Voicemail filter explicitly says the service is not configured rather than inventing voicemails. Call forwarding likewise needs a future routing service. Browser microphone preference is saved to the user's chat/video preferences.
 
+### Guest meetings and optional passwords (development PR)
+
+Guests can join a normal eight-digit meeting via a direct link or meeting ID using a display name and an optional meeting password, without creating an account. The host may set or clear a meeting password in the meeting pre-join screen. Meeting passwords are stored as Argon2 hashes; the server validates access and returns a short-lived, room-scoped LiveKit token. Direct-call rooms and breakout rooms are not accessible through this guest endpoint. Guests have no workspace/chat/file permissions.
+
+**Status:** Under review; requires successful CI and an actual host/guest/browser call test before production deployment. Existing user sessions and meeting IDs are preserved.
+
+**Next development areas:** Chat file/photo uploads with authorized downloads; permission-scoped LightNAS SMB/NFS or API shares; and an administrator-controlled plugin catalog with signed/approved extensions. These are not implemented by this change.
+
 ### Meeting numbers, direct calls and settings
 
 - **Meeting numbers:** NovaNexus reserves unique random eight-digit numbers in PostgreSQL. Join links have the form \`https://10.5.5.51/12345678\` on local IP installs. The number is a sample; the app generates a new one when starting each meeting.
