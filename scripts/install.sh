@@ -92,7 +92,7 @@ if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
 fi
 if valid_ipv4 "$NOVANEXUS_DOMAIN"; then
   TLS_MODE=internal
-  NOVANEXUS_TLS_EMAIL=local@novanexus.invalid
+  if [[ -z "$NOVANEXUS_TLS_EMAIL" ]]; then NOVANEXUS_TLS_EMAIL=local@novanexus.invalid; fi
   log "IP-only HTTPS: generating local TLS CA. Browsers need its root certificate to trust this server."
 elif valid_domain "$NOVANEXUS_DOMAIN"; then
   TLS_MODE=public
