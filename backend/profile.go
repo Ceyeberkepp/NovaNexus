@@ -21,7 +21,7 @@ func (s *Server) profileAPI(w http.ResponseWriter,r *http.Request){
  // Only locally encoded small PNG/JPEG/WebP pictures are accepted. Do not fetch remote URLs.
  if len(c.Avatar)>60000 || (c.Avatar!="" && !(strings.HasPrefix(c.Avatar,"data:image/png;base64,")||strings.HasPrefix(c.Avatar,"data:image/jpeg;base64,")||strings.HasPrefix(c.Avatar,"data:image/webp;base64,"))){fail(w,400,"Profile image must be a small PNG, JPEG or WebP image");return}
  var updated User
- e=s.db.QueryRow(r.Context(),`UPDATE users SET name=$2,job_title=$3,birthday=$4,avatar=$5 WHERE id=$1 AND active=TRUE RETURNING id,name,email,username,role,must_change_password,mfa_enabled,job_title,birthday,avatar`,u.ID,c.Name,c.JobTitle,c.Birthday,c.Avatar).Scan(&updated.ID,&updated.Name,&updated.Email,&updated.Username,&updated.Role,&updated.MustChange,&updated.MFAEnabled,&updated.JobTitle,&updated.Birthday,&updated.Avatar)
+ e=s.db.QueryRow(r.Context(),`UPDATE users SET name=$2,job_title=$3,birthday=$4,avatar=$5 WHERE id=$1 AND active=TRUE RETURNING id,name,email,username,role,must_change_password,mfa_enabled,job_title,birthday,avatar,COALESCE(terms_version,'')`,u.ID,c.Name,c.JobTitle,c.Birthday,c.Avatar).Scan(&updated.ID,&updated.Name,&updated.Email,&updated.Username,&updated.Role,&updated.MustChange,&updated.MFAEnabled,&updated.JobTitle,&updated.Birthday,&updated.Avatar,&updated.TermsVersion)
  if e!=nil{fail(w,500,"Profile update failed");return}
  s.audit(r,u.ID,"account.profile_updated",u.Email)
  respond(w,200,map[string]any{"user":updated.data()})

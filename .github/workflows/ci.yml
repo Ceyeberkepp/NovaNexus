@@ -89,10 +89,15 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"email":"admin","password":"admin"}' "$base/api/auth/login")" = "401"
           curl --fail --silent -c /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"email":"admin","password":"integration-test-temporary-administrator-password-very-long"}' "$base/api/auth/login" > /tmp/login.json
           grep -q 'must_change_password' /tmp/login.json
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie "$base/api/users")" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie "$base/api/users")" = "401"
           curl --fail --silent -b /tmp/nova-cookie -H 'Content-Type: application/json' -d '{"currentPassword":"integration-test-temporary-administrator-password-very-long","newPassword":"integration-test-new-secure-password"}' "$base/api/auth/change-password" | grep -q 'true'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie "$base/api/users")" = "401"
           curl --fail --silent -c /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"email":"admin","password":"integration-test-new-secure-password"}' "$base/api/auth/login" | grep -q '"Admin"'
+          curl --fail --silent -b /tmp/nova-cookie2 "$base/api/auth/me" | grep -q '"terms_required":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 "$base/api/users")" = "401"
+          version="$(curl -fsS "$base/api/terms" | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])')"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"version":"invalid","accept":true}' "$base/api/terms")" = "400"
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"version\":\"$version\",\"accept\":true}" "$base/api/terms" | grep -q '"terms_required":false'
           curl --fail --silent -b /tmp/nova-cookie2 "$base/api/users" | grep -q '"users"'
       - name: Verify eight-character passwords, persisted calendar and direct messages
         run: |
@@ -109,6 +114,8 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/calendar")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/messages?peer=$second_id")" = "401"
           curl -fsS -c /tmp/nova-second-cookie -H 'Content-Type: application/json' -d '{"email":"second@local.invalid","password":"12345678"}' "$base/api/auth/login" > /tmp/nova-second-login.json
+          second_terms_version="$(curl -fsS "$base/api/terms" | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])')"
+          curl -fsS -b /tmp/nova-second-cookie -H 'Content-Type: application/json' -d "{\"version\":\"$second_terms_version\",\"accept\":true}" "$base/api/terms" | grep -q '"terms_required":false'
           curl -fsS -b /tmp/nova-second-cookie "$base/api/messages?peer=1" | grep -q 'Hello from backend integration'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie "$base/api/calendar")" = "200"
       - name: Verify eight-digit meeting ID, direct calls and breakout management

@@ -1,3 +1,10 @@
+## Privacy, guest limits and Terms acceptance
+
+- **No tracking pixels or third-party analytics:** The login background is a local CSS gradient instead of an image fetched from Unsplash. The Caddy content-security policy allows only local images, and the app does not embed advertising pixels, analytics SDKs or cross-site advertising identifiers. Necessary session cookies, temporary request-rate counters, and security/audit records remain in use.
+- **Unauthenticated visitor limits:** Public pages, static assets, branding and the Terms endpoint are rate-limited to 180 requests per minute per visitor, with a separate 6,000-per-minute safeguard per directly connected origin. Rate counters are held only in server memory and expire after one minute. Login has its existing stricter per-account limits. Behind Cloudflare, `CF-Connecting-IP` helps separate visitors, while the origin safeguard limits forged headers; this is not a substitute for optional Cloudflare edge WAF/bot protections. If a large team shares a proxy or NAT, adjust the thresholds after testing.
+- **Terms & Conditions:** A canonical, versioned agreement is published at `GET /api/terms`. After authenticating, every member must actively check an agreement checkbox and submit `POST /api/terms`; the database stores the accepted version and UTC timestamp per user. The backend blocks authenticated workspace APIs before acknowledgment, while allowing password changes, logout and reading the Terms. An updated agreement version requires reacceptance.
+- **Administrative review:** The bundled Terms are a starting organizational policy, not legal advice. Review the wording, privacy practices, retention obligations and meeting recording laws before production use. The Terms do not replace a detailed privacy notice or contractual compliance assessment.
+
 # NovaNexus
 
 **A unified, self-hosted workspace platform — under active development.**

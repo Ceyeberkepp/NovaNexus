@@ -4,6 +4,7 @@ import CallNotifications from './CallNotifications';
 import CallsPanel from './CallsPanel';
 import AdminConsole from './AdminConsole';
 import AccountSecurity from './AccountSecurity';
+import TermsConsent from './TermsConsent';
 import WorkspaceAssistant from './WorkspaceAssistant';
 import ChatPreferences,{readChatPreferences,chatThemes,chatBackgrounds} from './ChatPreferences';
 import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
@@ -107,7 +108,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
       const result = await signIn(email, password,mfaCode);
       setUser(result.user);
       setMfaCode('');setMfaPending(false);setPassword('');
-      setView(result.user.must_change_password ? 'change-password' : (prefilledRoom&&/^[0-9]{8}$/.test(prefilledRoom)?'meeting':'dashboard'));
+      setView(result.user.must_change_password ? 'change-password' : result.user.terms_required ? 'terms' : (prefilledRoom&&/^[0-9]{8}$/.test(prefilledRoom)?'meeting':'dashboard'));
     } catch (error) {
       if(error.message==='MFA_REQUIRED'){setMfaPending(true);setAuthError('Authenticator code required to finish signing in.');}
       else {setAuthError(error.message || 'Sign-in failed');if(error.message==='Invalid credentials'){setMfaPending(false);setMfaCode('');}}
@@ -117,7 +118,7 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
   };
 
   return (
-    <div className="h-screen w-full bg-[#f0f4f8] flex items-center justify-center p-4 font-sans text-slate-800 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center">
+    <div className="h-screen w-full bg-[#f0f4f8] flex items-center justify-center p-4 font-sans text-slate-800 bg-gradient-to-br from-sky-200 via-indigo-100 to-purple-200">
       {/* Overlay */}
       <div className="absolute inset-0 bg-white/40 backdrop-blur-3xl"></div>
 
@@ -1876,7 +1877,7 @@ function App() {
     (async () => {
       try {
         const data = await getSession();
-        if (active) { setUser(data.user); const requestedRoom=/^\/([0-9]{8})\/?$/.exec(window.location.pathname)?.[1]||new URLSearchParams(window.location.search).get('room');setView(data.user.must_change_password ? 'change-password' : (requestedRoom&&/^[0-9]{8}$/.test(requestedRoom)?'meeting':'dashboard')); }
+        if (active) { setUser(data.user); const requestedRoom=/^\/([0-9]{8})\/?$/.exec(window.location.pathname)?.[1]||new URLSearchParams(window.location.search).get('room');setView(data.user.must_change_password ? 'change-password' : data.user.terms_required ? 'terms' : (requestedRoom&&/^[0-9]{8}$/.test(requestedRoom)?'meeting':'dashboard')); }
       } catch (error) {
         console.error('Authentication service unavailable', error);
       } finally {
@@ -1938,6 +1939,7 @@ function App() {
 
   if (authLoading) return <div className="min-h-screen flex items-center justify-center" role="status">Checking your session...</div>;
   if (view === 'change-password') return <ChangeInitialPassword onComplete={() => {setUser(null);setView('auth');}} />;
+  if (user?.terms_required||view === 'terms') return <TermsConsent onAccepted={(updated)=>{setUser(updated);setView('dashboard')}} onSignOut={async()=>{try{await signOut()}finally{setUser(null);setView('auth')}}}/>;
   if (view === 'auth') return <AuthScreen setUser={setUser} setView={setView} prefilledRoom={meetingRoom} />;
   if (view === 'meeting') return <MeetingRoom roomId={meetingRoom} user={user} onEnd={handleMeetingEnd} autoJoin={meetingOptions.autoJoin} audioOnly={meetingOptions.audioOnly} />; 
 
