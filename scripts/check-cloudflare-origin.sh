@@ -32,6 +32,9 @@ if [[ "$RESPONSE" != *'"status":"ok"'* ]]; then
 fi
 echo "[NovaNexus] PASS: Original HTTPS endpoint is healthy."
 printf '[NovaNexus] Cloudflare Tunnel service: HTTPS to %s:443\n' "$DOMAIN"
-echo "[NovaNexus] On the cloudflared connector host, trust the origin CA if the certificate is locally issued."
+echo "[NovaNexus] Cloudflare CA Pool expects a CERTIFICATE FILE PATH accessible to cloudflared, not pasted PEM text."
+echo "[NovaNexus] Copy/mount this CA onto the cloudflared host or container, then use that local path in CA Pool."
+echo "[NovaNexus] Keep Disable TLS certificate verification OFF once the CA Pool file is configured."
+echo "[NovaNexus] Verify from the cloudflared host: curl --cacert /path/on/connector/novanexus-ca.crt https://$DOMAIN/api/health"
 printf '[NovaNexus] Local CA path on the appliance: %s\n' "$CA_FILE"
 echo "[NovaNexus] If Cloudflare still reports 502, verify the same origin from the cloudflared machine and inspect its logs."
