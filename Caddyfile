@@ -26,5 +26,11 @@
 {$NOVANEXUS_DOMAIN} {
     import novanexus_routes
 }
+# Local-only HTTP origin for a tunnel agent running on this same host.
+# Never bind host port 8088/18080 to 0.0.0.0 or forward it from the router.
+# The public tunnel edge supplies HTTPS; this connection is localhost only.
+http://:8088 {
+    import novanexus_routes
+}
 # The installer renders this file. Keep it present even on LAN-only deployments.
 import /etc/caddy/additional-sites.caddy
