@@ -295,7 +295,7 @@ func main() {
   if s.guestLimited(w,r){return}
   w.Header().Set("X-Content-Type-Options","nosniff")
   w.Header().Set("X-Frame-Options","DENY")
-  w.Header().Set("Referrer-Policy","strict-origin-when-cross-origin")
+  w.Header().Set("Referrer-Policy","no-referrer")
   mux.ServeHTTP(w,r)
  })
  srv:=&http.Server{Addr:":"+fallback(os.Getenv("PORT"),"3000"),Handler:handler,ReadHeaderTimeout:5*time.Second,ReadTimeout:15*time.Second,WriteTimeout:30*time.Second,IdleTimeout:60*time.Second}
