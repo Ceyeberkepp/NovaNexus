@@ -115,7 +115,7 @@ jobs:
           cp /tmp/novanexus-local-ca.crt "$temp_root/novanexus-local-root-ca.crt"
           NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh | grep -q 'PASS: Original HTTPS endpoint'
           rm -rf "$temp_root"
-          test "$(docker compose config --format json | python3 -c 'import sys,json; c=json.load(sys.stdin); print(len(c["services"]["https"]["ports"]))')" = "2"
+          docker compose config --format json | python3 -c 'import sys,json; ports=json.load(sys.stdin)["services"]["https"]["ports"]; assert sorted((str(p["target"]),p["protocol"]) for p in ports)==[("443","tcp"),("443","udp"),("80","tcp")],ports'
       - name: Container logs on failure
         if: failure()
         run: docker compose logs --tail=100 app db
