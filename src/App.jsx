@@ -542,138 +542,57 @@ const SchedulePanel = ({ startMeeting }) => {
 };
 
 // --- PROFILE SETTINGS MODAL ---
-const ProfileSettingsModal = ({ user, onClose, onUpdate }) => {
-    // ... existing ProfileSettingsModal code ...
-    // (Ensure the full implementation is here as provided in previous turns)
-    const [formData, setFormData] = useState({
-        name: user?.name || '',
-        jobTitle: user?.jobTitle || '',
-        birthday: user?.birthday || '',
-        password: '',
-        email: user?.email || '',
-        avatar: user?.avatar || null
-    });
-    const fileInputRef = useRef(null);
-
-    const handleImageUpload = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, avatar: reader.result }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const handleSave = (e) => {
-        e.preventDefault();
-        onUpdate({
-            ...user,
-            ...formData
-        });
-        onClose();
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[300] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
-                    <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase tracking-widest">Edit Profile</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition-colors"><X size={20} className="text-slate-400"/></button>
-                </div>
-                
-                <div className="overflow-y-auto p-8 pt-4">
-                    <div className="flex flex-col items-center mb-8">
-                        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                            <div className="w-28 h-28 rounded-full border-4 border-indigo-50 shadow-xl overflow-hidden bg-slate-50 flex items-center justify-center">
-                                {formData.avatar ? (
-                                    <img src={formData.avatar} alt="Profile" className="w-full h-full object-cover" />
-                                ) : (
-                                    <UserIcon size={48} className="text-slate-300"/>
-                                )}
-                            </div>
-                            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Camera size={24} className="text-white"/>
-                            </div>
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                className="hidden" 
-                                accept="image/*"
-                                onChange={handleImageUpload}
-                            />
-                        </div>
-                        <p className="mt-3 text-[10px] font-bold text-indigo-600 uppercase tracking-widest cursor-pointer hover:underline" onClick={() => fileInputRef.current?.click()}>Change Picture</p>
-                    </div>
-
-                    <form id="profile-form" onSubmit={handleSave} className="space-y-5">
-                        <div className="grid grid-cols-2 gap-5">
-                            <div className="col-span-2">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase ml-2 mb-1 block flex items-center gap-1"><UserIcon size={10}/> Full Name</label>
-                                <input 
-                                    className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold text-xs text-slate-700 focus:ring-2 focus:ring-indigo-100 transition-all" 
-                                    value={formData.name}
-                                    onChange={e => setFormData({...formData, name: e.target.value})}
-                                    placeholder="e.g. John Doe"
-                                />
-                            </div>
-                            
-                            <div className="col-span-2 sm:col-span-1">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase ml-2 mb-1 block flex items-center gap-1"><Briefcase size={10}/> Job Title</label>
-                                <input 
-                                    className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold text-xs text-slate-700 focus:ring-2 focus:ring-indigo-100 transition-all" 
-                                    value={formData.jobTitle}
-                                    onChange={e => setFormData({...formData, jobTitle: e.target.value})}
-                                    placeholder="e.g. Product Manager"
-                                />
-                            </div>
-
-                            <div className="col-span-2 sm:col-span-1">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase ml-2 mb-1 block flex items-center gap-1"><Cake size={10}/> Birthday</label>
-                                <input 
-                                    type="date"
-                                    className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold text-xs text-slate-700 focus:ring-2 focus:ring-indigo-100 transition-all" 
-                                    value={formData.birthday}
-                                    onChange={e => setFormData({...formData, birthday: e.target.value})}
-                                />
-                            </div>
-
-                            <div className="col-span-2">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase ml-2 mb-1 block flex items-center gap-1"><Mail size={10}/> Email Address</label>
-                                <input 
-                                    className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold text-xs text-slate-500 cursor-not-allowed" 
-                                    value={formData.email}
-                                    disabled
-                                />
-                            </div>
-
-                            <div className="col-span-2 pt-4 border-t border-slate-50">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase ml-2 mb-1 block flex items-center gap-1"><Key size={10}/> New Password</label>
-                                <input 
-                                    type="password"
-                                    className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold text-xs text-slate-700 focus:ring-2 focus:ring-indigo-100 transition-all" 
-                                    value={formData.password}
-                                    onChange={e => setFormData({...formData, password: e.target.value})}
-                                    placeholder="Leave blank to keep current"
-                                />
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <div className="p-6 border-t border-slate-50 bg-white">
-                    <button 
-                        type="submit" 
-                        form="profile-form"
-                        className="w-full bg-indigo-600 py-4 rounded-2xl text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all"
-                    >
-                        Save Changes
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
+const ProfileSettingsModal = ({ user, onClose, onUpdate, onSecurity }) => {
+ const [form,setForm]=useState({name:user?.name||'',jobTitle:user?.jobTitle||'',birthday:user?.birthday||'',avatar:user?.avatar||''});
+ const [error,setError]=useState('');
+ const [busy,setBusy]=useState(false);
+ const input='w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm focus:ring-2 focus:ring-indigo-400 outline-none';
+ async function uploadPicture(event){
+  const file=event.target.files?.[0];
+  if(!file)return;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type)){setError('Choose a PNG, JPEG or WebP photo.');return}
+  if(file.size>5*1024*1024){setError('Choose a photo smaller than 5 MB.');return}
+  try{
+   const blob=await createImageBitmap(file);
+   const canvas=document.createElement('canvas');
+   canvas.width=96;canvas.height=96;
+   const ctx=canvas.getContext('2d');
+   const edge=Math.min(blob.width,blob.height);
+   ctx.drawImage(blob,(blob.width-edge)/2,(blob.height-edge)/2,edge,edge,0,0,96,96);
+   blob.close();
+   const avatar=canvas.toDataURL('image/jpeg',0.68);
+   if(avatar.length>11000)throw Error('Picture is too large after resizing.');
+   setForm(old=>({...old,avatar}));setError('');
+  }catch(e){setError(e.message||'Could not process picture')}
+ }
+ async function save(e){
+  e.preventDefault();setBusy(true);setError('');
+  try{
+   const response=await fetch('/api/account/profile',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});
+   const data=await response.json();
+   if(!response.ok)throw Error(data.error||'Could not update profile');
+   onUpdate(data.user);onClose();
+  }catch(e){setError(e.message)}finally{setBusy(false)}
+ }
+ return <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
+  <section role="dialog" aria-modal="true" aria-label="Edit your profile" className="w-full max-w-lg max-h-[90vh] overflow-auto rounded-[2rem] bg-white p-7 shadow-2xl">
+   <header className="flex items-center justify-between mb-6"><h2 className="text-xl font-black text-slate-900">My Profile</h2><button type="button" aria-label="Close profile" onClick={onClose} className="rounded-full p-2 hover:bg-slate-100"><X size={20}/></button></header>
+   <form className="space-y-4" onSubmit={save}>
+    <div className="flex flex-col items-center gap-3">
+     <UserAvatar name={form.name} src={form.avatar} className="w-20 h-20"/>
+     <label className="cursor-pointer text-sm font-semibold text-indigo-700">Change profile photo<input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={uploadPicture}/></label>
+     {form.avatar&&<button type="button" className="text-xs text-slate-500 underline" onClick={()=>setForm(v=>({...v,avatar:''}))}>Remove picture</button>}
+    </div>
+    <label className="block text-sm font-semibold text-slate-700">Display name<input required maxLength={120} minLength={2} className={input+' mt-2'} value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))}/></label>
+    <label className="block text-sm font-semibold text-slate-700">Job title<input maxLength={120} className={input+' mt-2'} value={form.jobTitle} onChange={e=>setForm(v=>({...v,jobTitle:e.target.value}))}/></label>
+    <label className="block text-sm font-semibold text-slate-700">Birthday (optional)<input type="date" className={input+' mt-2'} value={form.birthday} onChange={e=>setForm(v=>({...v,birthday:e.target.value}))}/></label>
+    <label className="block text-sm font-semibold text-slate-700">Email address<input disabled className={input+' mt-2 opacity-70'} value={user?.email||''} readOnly/></label>
+    <button type="button" onClick={()=>{onClose();onSecurity()}} className="flex items-center gap-2 text-indigo-700 font-semibold text-sm"><ShieldCheck size={17}/> Password and two-factor authentication</button>
+    {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
+    <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose} className="rounded-xl border px-5 py-3 text-sm font-bold">Cancel</button><button disabled={busy||form.name.trim().length<2} className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">{busy?'Saving...':'Save changes'}</button></div>
+   </form>
+  </section>
+ </div>;
 };
 
 // --- SETTINGS MODAL COMPONENT ---
@@ -1995,11 +1914,12 @@ function App() {
         <div className="h-screen w-full bg-[#f9fafb] flex font-sans text-slate-800 overflow-hidden selection:bg-indigo-100 selection:text-indigo-800 flex-col md:flex-row">
             <CallNotifications user={user} onJoin={startMeeting} />
             {/* Profile Modal */}
-          {false && showProfile && (
+          {showProfile && (
               <ProfileSettingsModal 
                   user={user} 
                   onClose={() => setShowProfile(false)} 
-                  onUpdate={handleUpdateProfile} 
+                  onUpdate={handleUpdateProfile}
+                  onSecurity={() => setCurrentTab('security')}
               />
           )}
 
@@ -2040,10 +1960,10 @@ function App() {
                 </div>
                 <div className="hidden md:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                 <div className="flex items-center gap-6">
-                    <div title="Profile editing is unavailable until server-side profile updates are implemented" className="flex items-center gap-3 bg-white pl-1.5 pr-4 py-1.5 rounded-full border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
+                    <button type="button" aria-label="Open my profile" onClick={() => setShowProfile(true)} className="flex items-center gap-3 bg-white pl-1.5 pr-4 py-1.5 rounded-full border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
                         <UserAvatar name={user?.name} src={user?.avatar} className="w-7 h-7"/>
                         <span className="text-[10px] font-black uppercase text-slate-700 group-hover:text-indigo-600 transition-colors hidden sm:block">{user?.name}</span>
-                    </div>
+                    </button>
                 </div>
             </header>
 
