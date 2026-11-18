@@ -7,6 +7,7 @@ export default function MeetingExtras({shareUrl,roomId,maxParticipants,user,isHo
  const room=useRoomContext();
  const [participants,setParticipants]=useState(1);
  const [expanded,setExpanded]=useState(false);
+ useEffect(()=>{const open=()=>setExpanded(v=>!v);window.addEventListener('novanexus:meeting-more',open);return()=>window.removeEventListener('novanexus:meeting-more',open);},[]);
  const [recording,setRecording]=useState(false);
  const [notice,setNotice]=useState('');
  const [breakoutOpen,setBreakoutOpen]=useState(false);
@@ -88,7 +89,7 @@ export default function MeetingExtras({shareUrl,roomId,maxParticipants,user,isHo
   catch{setNotice('Copy this meeting link: '+(shareUrl||window.location.origin+'/'+roomId))}
  }
 
- return <div className="fixed bottom-4 right-4 z-[60] max-w-[min(370px,94vw)] text-white text-xs">
+ return <div className="fixed bottom-[96px] left-1/2 z-[90] w-[min(380px,92vw)] -translate-x-1/2 text-white text-xs">
   {expanded&&<div role="menu" className="mb-3 max-h-[75vh] overflow-y-auto rounded-2xl border border-zinc-600 bg-zinc-900/95 p-5 space-y-4 shadow-2xl backdrop-blur">
    <h3 className="text-sm font-black text-white">Meeting options</h3>
    <p className="text-[11px] text-zinc-400">Meeting {roomId} · {participants} of {maxParticipants} participants</p>
@@ -113,6 +114,6 @@ export default function MeetingExtras({shareUrl,roomId,maxParticipants,user,isHo
    <p className="border-t border-zinc-700 pt-3 text-zinc-400 text-[11px]">Broadcasting and remote control require separate services.</p>
    {notice&&<p role="status" className="text-amber-200 break-words">{notice}</p>}
   </div>}
-  <button aria-label="More meeting options" aria-expanded={expanded} onClick={()=>setExpanded(x=>!x)} className="ml-auto flex items-center justify-center gap-2 rounded-2xl border border-zinc-600 bg-zinc-900 p-4 text-white shadow-xl hover:bg-zinc-800"><MoreVertical size={21}/><span className="font-bold">More</span></button>
+
  </div>;
 }
