@@ -29,6 +29,7 @@ func TestAcceptedBrowserOriginThroughCloudflareTunnel(t *testing.T) {
   t.Run(tc.name,func(t *testing.T){
    r:=httptest.NewRequest(http.MethodPost,"http://192.168.0.52/api/auth/login",nil)
    r.Host="192.168.0.52"
+   if tc.name=="local development" {r.Host="localhost:3000"}
    if tc.origin!="" {r.Header.Set("Origin",tc.origin)}
    if tc.fetchSite!="" {r.Header.Set("Sec-Fetch-Site",tc.fetchSite)}
    if got:=acceptedBrowserOrigin(r,tc.secure);got!=tc.want {
