@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Users,Shield,Calendar,Image as ImageIcon,ScrollText,Settings,Save,RefreshCw,Sparkles,Clock,UserPlus,Edit2} from 'lucide-react';
+import {Users,Shield,Calendar,Image as ImageIcon,ScrollText,Settings,Save,RefreshCw,Sparkles,Clock,UserPlus,Edit2,Search,Download} from 'lucide-react';
 import {fetchUsers,provisionUser} from './auth-client';
 
 async function adminRequest(path,options={}){
@@ -20,6 +20,8 @@ export default function AdminConsole({users,setUsers}){
  const [form,setForm]=useState({name:'',username:'',email:'',password:''});
  const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',meeting_public_url:'',session_minutes:'480',waiting_room_enabled:'false',waiting_room_message:'Please wait for your host to admit you.',ai_enabled:'true'});
  const [logs,setLogs]=useState([]);
+ const [auditSearch,setAuditSearch]=useState('');
+ const [auditFilter,setAuditFilter]=useState('all');
  const [groups,setGroups]=useState([]);
  const [groupForm,setGroupForm]=useState({name:'',description:''});
  useEffect(()=>{refresh();},[]);
@@ -177,11 +179,31 @@ export default function AdminConsole({users,setUsers}){
       <button className={btn+' flex items-center gap-2'} disabled={loading}><Save size={16}/> Save changes</button>
     </form>}
     {tab==='ai'&&<form onSubmit={saveSettings} className="max-w-3xl space-y-6 rounded-[2.5rem] border border-slate-100 bg-white p-9 shadow-sm"><div className="flex items-center gap-4"><div className="rounded-2xl bg-indigo-50 p-4 text-indigo-600"><Sparkles size={25}/></div><div><h2 className="text-xl font-black">AI Assistant</h2><p className="text-[11px] uppercase tracking-widest text-slate-400">Private and self-hosted</p></div></div><label className="flex items-center justify-between gap-4 text-sm font-semibold">Enable Nexus AI for members <input type="checkbox" checked={settings.ai_enabled==='true'} onChange={e=>setSettings({...settings,ai_enabled:String(e.target.checked)})} className="h-5 w-5 accent-indigo-600"/></label><p className="text-xs leading-relaxed text-slate-500">Uses a small local model. No external API key required. AI cannot edit accounts or read private messages and its answers may be inaccurate.</p><button className={btn} disabled={loading}>Save AI settings</button></form>}
-     {tab==='logs'&&<div className="rounded-2xl bg-white border overflow-hidden">
-      <div className="p-5 border-b flex justify-between gap-3"><h2 className="font-bold">Administrative audit events</h2><button onClick={exportLogs} className="text-sm font-semibold text-indigo-600">Export CSV</button></div>
-      <table className="w-full text-left text-sm"><thead><tr className="bg-slate-50"><th className="p-3">When</th><th className="p-3">Event</th><th className="p-3">Actor</th><th className="p-3">Target</th></tr></thead><tbody>{logs.map(l=><tr className="border-t" key={l.id}><td className="p-3">{new Date(l.created_at).toLocaleString()}</td><td className="p-3">{l.event}</td><td className="p-3">{l.actor}</td><td className="p-3">{l.target}</td></tr>)}</tbody></table>
-      {logs.length===0&&<p className="p-5 text-sm text-slate-500">No administrative events recorded yet.</p>}
-    </div>}
+     
+{tab==='logs'&&<section className="overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white shadow-sm">
+  <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-7 py-7">
+    <div><h2 className="flex items-center gap-3 text-xl font-black text-slate-900"><ScrollText className="text-indigo-600" size={23}/> Audit Logs</h2><p className="mt-2 text-xs text-slate-500">Recorded administrative events · last {logs.length} entries</p></div>
+    <button onClick={exportLogs} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-bold text-white"><Download size={16}/> Export CSV</button>
+  </div>
+  <div className="flex flex-wrap gap-3 border-b border-slate-100 bg-slate-50/50 px-7 py-5">
+    <label className="relative min-w-[220px] flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={17}/><input className={input+' pl-10'} placeholder="Search event, actor, or target" aria-label="Search audit log" value={auditSearch} onChange={e=>setAuditSearch(e.target.value)}/></label>
+    <select aria-label="Audit event category" className={input+' max-w-[190px]'} value={auditFilter} onChange={e=>setAuditFilter(e.target.value)}>
+      <option value="all">All activity</option><option value="auth.">Authentication</option><option value="user.">Users</option><option value="group.">Groups</option><option value="settings.">Settings</option><option value="branding.">Branding</option><option value="mfa.">MFA security</option>
+    </select>
+    <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold" onClick={refresh}><RefreshCw size={15}/> Refresh</button>
+  </div>
+  <div className="max-h-[580px] overflow-auto">
+    <table className="w-full min-w-[610px] text-left text-xs">
+      <thead className="sticky top-0 z-10 bg-white"><tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400"><th className="px-7 py-4">Event</th><th className="px-4 py-4">Actor</th><th className="px-4 py-4">Target</th><th className="px-4 py-4">Date / Time</th></tr></thead>
+      <tbody>{logs.filter(l=>(auditFilter==='all'||String(l.event).startsWith(auditFilter))&&[l.event,l.actor,l.target].some(v=>String(v||'').toLowerCase().includes(auditSearch.toLowerCase()))).map(l=>
+        <tr key={l.id} className="border-b border-slate-50 hover:bg-indigo-50/30">
+          <td className="px-7 py-4"><div className="flex items-center gap-3"><span className={'h-2 w-2 rounded-full '+(String(l.event).includes('password')||String(l.event).startsWith('mfa.')?'bg-amber-500':String(l.event).includes('login')?'bg-emerald-500':'bg-indigo-500')}/><span className="font-semibold text-slate-800">{String(l.event).replaceAll('.',' · ')}</span></div></td>
+          <td className="px-4 py-4 text-slate-700">{l.actor}</td><td className="px-4 py-4 text-slate-500">{l.target}</td><td className="px-4 py-4 text-slate-500">{new Date(l.created_at).toLocaleString()}</td>
+        </tr>)}</tbody>
+    </table>
+    {!logs.some(l=>(auditFilter==='all'||String(l.event).startsWith(auditFilter))&&[l.event,l.actor,l.target].some(v=>String(v||'').toLowerCase().includes(auditSearch.toLowerCase())))&&<div className="p-14 text-center"><ScrollText className="mx-auto mb-3 text-slate-300" size={34}/><p className="font-bold text-slate-600">No matching audit records</p><p className="mt-2 text-xs text-slate-400">Only real events from the database are displayed.</p></div>}
+  </div>
+</section>}
    </div>
  </section>;
 }
