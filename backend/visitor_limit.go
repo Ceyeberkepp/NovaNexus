@@ -36,6 +36,11 @@ func (s *Server) guestLimited(w http.ResponseWriter,r *http.Request) bool {
  if s.visitors==nil{s.visitors=make(map[string]visitorWindow)}
  if len(s.visitors)>10000 {
   for k,v:=range s.visitors {if now.Sub(v.Start)>time.Minute{delete(s.visitors,k)}}
+  // A rotating set of forged client addresses must not grow this map
+  // without bound. Use one shared overflow bucket until windows expire.
+  if len(s.visitors)>10000 {
+   if _,known:=s.visitors["client:"+client];!known {client="overflow"}
+  }
  }
  allowed:=true
  for _,entry:=range []struct{key string;limit int}{{"client:"+client,visitorPerMinute},{"origin:"+peer,visitorOriginPerMinute}} {
