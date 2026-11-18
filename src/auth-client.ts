@@ -3,6 +3,8 @@ export interface NovaUser {
   id: number;
   name: string;
   email: string;
+  username: string;
+  mfa_enabled: boolean;
   role: NovaRole;
   must_change_password: boolean;
 }
@@ -26,9 +28,9 @@ async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T>
   }
   return body as T;
 }
-export function signIn(email: string, password: string): Promise<AuthResponse> {
+export function signIn(email: string, password: string, code = ""): Promise<AuthResponse> {
   return apiRequest('/api/auth/login', {
-    method: 'POST', body: JSON.stringify({email, password})
+    method: 'POST', body: JSON.stringify({email, password, code})
   });
 }
 export function getSession(): Promise<AuthResponse> {
@@ -42,9 +44,9 @@ export function rotateInitialPassword(currentPassword: string,newPassword: strin
 export function fetchUsers(): Promise<UsersResponse> {
   return apiRequest('/api/users');
 }
-export function provisionUser(name: string,email: string,password: string): Promise<{user:NovaUser}> {
+export function provisionUser(name: string,email: string,password: string,username?: string): Promise<{user:NovaUser}> {
   return apiRequest('/api/users',{
-    method: 'POST', body: JSON.stringify({name,email,password})
+    method: 'POST', body: JSON.stringify({name,email,password,username})
   });
 }
 export function signOut(): Promise<{ok:boolean}> {
