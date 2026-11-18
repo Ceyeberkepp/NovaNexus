@@ -6,7 +6,6 @@ import (
  "crypto/sha1"
  "encoding/base32"
  "encoding/binary"
- "encoding/hex"
  "fmt"
  "net/http"
  "net/url"
