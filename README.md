@@ -1,8 +1,8 @@
-<p align="center"><img src="public/nexus-workspace-logo.webp" alt="Nexus Workspace by Nova" width="480" /></p>
+<p align="center"><img src="public/nexus-workspace-logo.svg" alt="Nexus Workspace by Nova" width="720" /></p>
 
 # Nexus Workspace by Nova
 
-The bundled logo is the default branding for the installer, login, app sidebar, browser icon and startup page. Administrators can still replace it using Branding settings.
+The sharp, scalable SVG logo is the default branding for the installer, login, app sidebar, browser icon and startup page. Administrators can still replace it using Branding settings.
 
 ---
 
