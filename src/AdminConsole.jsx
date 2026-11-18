@@ -175,7 +175,7 @@ export default function AdminConsole({users,setUsers}){
               </div>)}
           </div>
           <p className="text-xs text-slate-500">PNG, JPEG, or WebP, maximum 128 KB. All assets are saved to the real workspace; no demonstration logos are inserted.</p>
-        </div>
+        </div>}
       <button className={btn+' flex items-center gap-2'} disabled={loading}><Save size={16}/> Save changes</button>
     </form>}
     {tab==='ai'&&<form onSubmit={saveSettings} className="max-w-3xl space-y-6 rounded-[2.5rem] border border-slate-100 bg-white p-9 shadow-sm"><div className="flex items-center gap-4"><div className="rounded-2xl bg-indigo-50 p-4 text-indigo-600"><Sparkles size={25}/></div><div><h2 className="text-xl font-black">AI Assistant</h2><p className="text-[11px] uppercase tracking-widest text-slate-400">Private and self-hosted</p></div></div><label className="flex items-center justify-between gap-4 text-sm font-semibold">Enable Nexus AI for members <input type="checkbox" checked={settings.ai_enabled==='true'} onChange={e=>setSettings({...settings,ai_enabled:String(e.target.checked)})} className="h-5 w-5 accent-indigo-600"/></label><p className="text-xs leading-relaxed text-slate-500">Uses a small local model. No external API key required. AI cannot edit accounts or read private messages and its answers may be inaccurate.</p><button className={btn} disabled={loading}>Save AI settings</button></form>}
