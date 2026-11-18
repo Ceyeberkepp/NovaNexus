@@ -105,7 +105,7 @@ jobs:
           docker compose up -d --force-recreate livekit
           sleep 4
           docker compose ps --status running livekit | grep -q livekit
-          docker compose logs --tail=60 livekit | grep -v 'error'
+          docker compose logs --tail=30 livekit
       - name: Container logs on failure
         if: failure()
         run: docker compose logs --tail=100 app db
