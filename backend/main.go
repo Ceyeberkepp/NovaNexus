@@ -84,6 +84,7 @@ func (s *Server) login(w http.ResponseWriter,r *http.Request) {
  var u User;var stored string
  err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,username,role,must_change_password,password_hash,mfa_enabled FROM users WHERE (lower(email)=lower($1) OR lower(username)=lower($1)) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&stored,&u.MFAEnabled)
  if err!=nil||!verifyPassword(c.Password,stored){fail(w,401,"Invalid credentials");return}
+ if u.MFAEnabled&&!s.verifySecondFactor(w,r,u.ID,c.Code){return}
  token:=randomHex(32)
  var durationText string
  if e:=s.db.QueryRow(r.Context(),"SELECT value FROM app_settings WHERE name='session_minutes'").Scan(&durationText);e!=nil{fail(w,503,"Session policy unavailable");return}
@@ -162,6 +163,7 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/messages/recent":s.recentMessagesAPI(w,r)
  case "/api/messages":s.messagesAPI(w,r)
  case "/api/calendar":s.calendarAPI(w,r)
+ case "/api/auth/mfa":s.mfaAPI(w,r)
  case "/api/auth/login":if r.Method=="POST"{s.login(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/auth/me":if r.Method=="GET"{s.me(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/auth/logout":if r.Method=="POST"{s.logout(w,r)}else{fail(w,405,"Method not allowed")}
@@ -181,6 +183,7 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_pending_secret TEXT",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_last_step BIGINT NOT NULL DEFAULT 0",
+  "CREATE TABLE IF NOT EXISTS mfa_recovery_codes(user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,code_hash TEXT NOT NULL,PRIMARY KEY(user_id,code_hash))",
   "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL)",
   "CREATE TABLE IF NOT EXISTS app_settings (name TEXT PRIMARY KEY,value TEXT NOT NULL)",
   "INSERT INTO app_settings(name,value) VALUES ('workspace_name','NovaNexus Workspace'),('default_meeting_limit','1000'),('session_minutes','480'),('waiting_room_enabled','false'),('waiting_room_message','Please wait for your host to admit you.'),('ai_enabled','true'),('meeting_public_url','') ON CONFLICT(name) DO NOTHING",
