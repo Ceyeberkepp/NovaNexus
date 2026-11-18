@@ -49,6 +49,7 @@ export default function CallsPanel({user,users}){
  const [filter,setFilter]=useState('All');
  const [search,setSearch]=useState('');
  const [selected,setSelected]=useState('');
+ const [showMatches,setShowMatches]=useState(false);
  const [showContacts,setShowContacts]=useState(false);
  const [error,setError]=useState('');
  const [loading,setLoading]=useState(false);
@@ -62,7 +63,7 @@ export default function CallsPanel({user,users}){
  useEffect(()=>{refresh();const timer=setInterval(()=>refresh(true),6000);return()=>clearInterval(timer)},[refresh]);
  useEffect(()=>{let mounted=true;navigator.mediaDevices?.enumerateDevices?.().then(all=>{if(mounted)setDeviceNames(all.filter(d=>d.kind==='audioinput'))}).catch(()=>{});return()=>{mounted=false}},[]);
  const contacts=useMemo(()=>users.filter(u=>u.active!==false&&u.id!==user.id).sort((a,b)=>a.name.localeCompare(b.name)),[users,user.id]);
- const matches=contacts.filter(c=>((c.name||'')+' '+(c.email||'')).toLowerCase().includes(search.toLowerCase()));
+ const matches=contacts.filter(c=>((c.name||'')+' '+(c.username||'')+' '+(c.email||'')).toLowerCase().includes(search.toLowerCase()));
  const person=contacts.find(x=>String(x.id)===String(selected));
  const visible=useMemo(()=>{
   return [...calls].filter(c=>{
@@ -82,8 +83,16 @@ export default function CallsPanel({user,users}){
   <div className="flex min-h-0 flex-1 flex-col md:flex-row">
    <aside className="flex w-full shrink-0 flex-col border-b border-slate-200 bg-[#fcfcff] md:w-[290px] md:border-b-0 md:border-r">
     <div className="space-y-3 border-b border-slate-100 p-4">
-      <label className="relative block"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-400"/><input aria-label="Search users to call" className="w-full rounded-lg border border-slate-200 bg-slate-100 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:bg-white" placeholder="Type a name or email" value={search} onChange={e=>{setSearch(e.target.value);setSelected('')}}/></label>
-      <select aria-label="Choose a contact" className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm" value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Select a member</option>{matches.map(c=><option value={c.id} key={c.id}>{c.name} ({c.email})</option>)}</select>
+      <div className="relative">
+       <label className="relative block"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-400"/><input aria-label="Search users to call" role="combobox" aria-expanded={showMatches&&!!search.trim()} aria-controls="calls-contact-results" aria-autocomplete="list" className="w-full rounded-lg border border-slate-200 bg-slate-100 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-500 focus:bg-white" placeholder="Type a name or email" value={search} onFocus={()=>setShowMatches(true)} onChange={e=>{setSearch(e.target.value);setSelected('');setShowMatches(true)}} onKeyDown={e=>{if(e.key==='Escape')setShowMatches(false);if(e.key==='Enter'&&matches.length){e.preventDefault();setSelected(String(matches[0].id));setSearch(matches[0].name);setShowMatches(false)}}}/></label>
+       {showMatches&&search.trim()&&<div id="calls-contact-results" role="listbox" className="absolute z-40 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">
+         {matches.slice(0,15).map(c=><button role="option" aria-selected={String(selected)===String(c.id)} key={c.id} type="button" className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-indigo-50 focus:bg-indigo-50" onClick={()=>{setSelected(String(c.id));setSearch(c.name);setShowMatches(false)}}>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">{initials(c.name)}</span><span className="min-w-0"><span className="block truncate text-xs font-semibold">{c.name}</span><span className="block truncate text-[11px] text-slate-400">{c.username?'@'+c.username+' · ':''}{c.email}</span></span>
+         </button>)}
+         {matches.length===0&&<p className="p-3 text-xs text-slate-500">No matching members.</p>}
+       </div>}
+      </div>
+      {person&&<div className="flex items-center justify-between rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-semibold"><span className="truncate">{person.name}</span><button type="button" aria-label="Clear selected person" onClick={()=>{setSearch('');setSelected('');setShowMatches(false)}}><X size={15}/></button></div>}
       <div className="grid grid-cols-2 gap-2"><button className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-35" disabled={!person} onClick={()=>eventCall(person,true)}><Phone size={16}/> Call</button><button className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-700 disabled:opacity-35" disabled={!person} onClick={()=>eventCall(person,false)}><Video size={17}/> Video</button></div>
       {search&&matches.length===0&&<p className="text-xs text-slate-500">No workspace members match that search.</p>}
     </div>
