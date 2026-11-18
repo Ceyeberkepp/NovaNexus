@@ -28,9 +28,14 @@ func (s *Server) createMeetingAPI(w http.ResponseWriter,r *http.Request){
  if r.Method!="POST"{fail(w,405,"Method not allowed");return}
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return}
  if u.MustChange{fail(w,403,"Password change required");return}
- var c struct{Kind string}
+ var c struct{Kind string; Password string}
  if asJSON(r,&c)!=nil||c.Kind!=""&&c.Kind!="normal"{fail(w,400,"Invalid meeting request");return}
+ if len(c.Password)>0 && (len(c.Password)<6 || len(c.Password)>128){fail(w,400,"Meeting password must be 6–128 characters");return}
  room,e:=createRoom(r.Context(),s.db,u.ID,"normal");if e!=nil{fail(w,503,"Unable to reserve meeting");return}
+ if c.Password!="" {
+  _,e=s.db.Exec(r.Context(),"UPDATE meeting_rooms SET guest_password_hash=$1 WHERE room=$2 AND owner_id=$3",passwordHash(c.Password),room,u.ID)
+  if e!=nil{_,_=s.db.Exec(r.Context(),"DELETE FROM meeting_rooms WHERE room=$1 AND owner_id=$2",room,u.ID);fail(w,503,"Unable to protect meeting");return}
+ }
  respond(w,201,map[string]any{"room":room,"urlPath":"/"+room})
 }
 func (s *Server) breakoutAPI(w http.ResponseWriter,r *http.Request){
