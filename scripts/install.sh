@@ -438,6 +438,10 @@ fi
 printf "\n==========================================\n"
 printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
 printf "Additional HTTPS endpoint: https://%s:%s/\n" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TUNNEL_PORT"
+printf "Cloudflare Tunnel origin service (HTTPS): https://%s:%s\n" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TUNNEL_PORT"
+printf "Cloudflare origin CA certificate: %s\n" "$CA_FILE"
+printf "Cloudflare route: configure HTTPS for %s:%s and trust the local CA on the connector host.\n" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TUNNEL_PORT"
+printf "Run origin diagnostics: bash %s/scripts/check-cloudflare-origin.sh\n" "$ROOT_DIR"
 if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]];then
   log "Existing service owns TCP 80. NovaNexus uses host HTTP port $NOVANEXUS_HTTP_PORT; the HTTPS GUI stays on port 443."
 fi
