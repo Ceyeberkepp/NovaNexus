@@ -235,7 +235,8 @@ LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
 PUBLIC_MEDIA=0
 if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" || "$TLS_MODE" == public ]]; then PUBLIC_MEDIA=1; fi
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
-  MEDIA_RTC_CONFIG='  use_external_ip: true'
+  MEDIA_RTC_CONFIG='  use_external_ip: true
+  advertise_internal_ip: true'
   MEDIA_TURN_CONFIG='turn:
   enabled: true
   udp_port: 3478'
