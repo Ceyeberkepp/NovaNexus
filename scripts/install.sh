@@ -64,6 +64,9 @@ NOVANEXUS_TLS_EMAIL=${NOVANEXUS_TLS_EMAIL:-}
 # Optional public access: a domain that points to this host via DNS and router/NAT.
 # An HTTP-only tunnel is not sufficient to carry WebRTC media.
 NOVANEXUS_PUBLIC_DOMAIN=${NOVANEXUS_PUBLIC_DOMAIN:-}
+NOVANEXUS_TUNNEL_DOMAIN=${NOVANEXUS_TUNNEL_DOMAIN:-}
+NOVANEXUS_HTTP_PORT=${NOVANEXUS_HTTP_PORT:-}
+NOVANEXUS_TUNNEL_PORT=${NOVANEXUS_TUNNEL_PORT:-}
 LAN_IP=$(detect_ipv4 || true)
 if [[ "$RESUME_INSTALL" == 1 ]]; then
   NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
@@ -75,6 +78,15 @@ if [[ "$RESUME_INSTALL" == 1 ]]; then
   if [[ -z "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
     NOVANEXUS_PUBLIC_DOMAIN=$(sed -n 's/^NOVANEXUS_PUBLIC_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
   fi
+  if [[ -z "$NOVANEXUS_TUNNEL_DOMAIN" ]]; then
+    NOVANEXUS_TUNNEL_DOMAIN=$(sed -n 's/^NOVANEXUS_TUNNEL_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
+  if [[ -z "$NOVANEXUS_HTTP_PORT" ]]; then
+    NOVANEXUS_HTTP_PORT=$(sed -n 's/^NOVANEXUS_HTTP_PORT=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
+  if [[ -z "$NOVANEXUS_TUNNEL_PORT" ]]; then
+    NOVANEXUS_TUNNEL_PORT=$(sed -n 's/^NOVANEXUS_TUNNEL_PORT=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
 elif [[ -z "$NOVANEXUS_DOMAIN" ]]; then
   NOVANEXUS_DOMAIN=$(detect_ipv4 || true)
   [[ -z "$NOVANEXUS_DOMAIN" ]] || log "Using detected server IP: $NOVANEXUS_DOMAIN"
@@ -82,6 +94,11 @@ fi
 if [[ -z "$NOVANEXUS_DOMAIN" ]]; then NOVANEXUS_DOMAIN=$(ask "Server IPv4 address or public DNS name"); fi
 if [[ "$RESUME_INSTALL" == 0 && -z "$NOVANEXUS_PUBLIC_DOMAIN" && -r /dev/tty ]]; then
   NOVANEXUS_PUBLIC_DOMAIN=$(ask "Optional public HTTPS hostname for outside access (Enter to keep LAN only)")
+fi
+if [[ -n "$NOVANEXUS_TUNNEL_DOMAIN" ]]; then
+  NOVANEXUS_TUNNEL_DOMAIN=${NOVANEXUS_TUNNEL_DOMAIN#https://}
+  NOVANEXUS_TUNNEL_DOMAIN=${NOVANEXUS_TUNNEL_DOMAIN%/}
+  valid_domain "$NOVANEXUS_TUNNEL_DOMAIN" || fail "Tunnel domain must be a valid hostname without a path."
 fi
 # A public domain already used as the primary address must not create a duplicate site.
 if [[ "$NOVANEXUS_PUBLIC_DOMAIN" == "$NOVANEXUS_DOMAIN" ]]; then NOVANEXUS_PUBLIC_DOMAIN=""; fi
@@ -114,7 +131,7 @@ fi
 
 log "Installing any missing system dependencies"
 needed=()
-for package in git curl ca-certificates openssl; do
+for package in git curl ca-certificates openssl iproute2; do
   if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx "install ok installed"; then needed+=("$package"); fi
 done
 if (( ${#needed[@]} )); then
@@ -153,21 +170,53 @@ systemctl enable --now docker
 docker info >/dev/null 2>&1 || fail "Docker daemon is not available."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required."
 
-# Fail early if the DNS record is not provisioned or the HTTPS listener ports are in use.
+# A local tunnel origin is always bound to 127.0.0.1, never public interfaces.
+# If another service occupies port 80, use an unoccupied host HTTP port.
+# This does not change the LAN HTTPS URL (port 443).
+host_port_busy(){
+  ss -H -ltn | awk '{print $4}' | grep -Eq "[:.]1$"
+}
+valid_port(){
+  [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1024 && 10#$1 <= 65535 ))
+}
 if [[ "$TLS_MODE" == public ]]; then
   getent ahosts "$NOVANEXUS_DOMAIN" >/dev/null || fail "DNS does not resolve $NOVANEXUS_DOMAIN. Set the DNS record first."
 fi
 if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
   getent ahosts "$NOVANEXUS_PUBLIC_DOMAIN" >/dev/null ||
-    log "WARNING: Public hostname $NOVANEXUS_PUBLIC_DOMAIN does not resolve yet; internet HTTPS will not work until DNS is configured."
+    log "WARNING: Public hostname $NOVANEXUS_PUBLIC_DOMAIN does not resolve yet. DNS must be configured before outside access works."
 fi
-if [[ "$RESUME_INSTALL" == 0 ]] && command -v ss >/dev/null; then
-  for port in 80 443; do
-    if ss -H -ltn | awk '{print $4}' | grep -Eq "[:.]${port}$"; then
-      fail "TCP port $port is already in use; free it before installation."
-    fi
-  done
+if [[ "$RESUME_INSTALL" == 0 ]]; then
+  [[ -n "$NOVANEXUS_HTTP_PORT" ]] || NOVANEXUS_HTTP_PORT=80
+  if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]] && ! valid_port "$NOVANEXUS_HTTP_PORT"; then fail "HTTP port must be 80 or 1024–65535.";fi
+  if host_port_busy "$NOVANEXUS_HTTP_PORT";then
+    [[ "$NOVANEXUS_HTTP_PORT" == 80 ]] || fail "Requested HTTP port $NOVANEXUS_HTTP_PORT is already in use."
+    for candidate in 8080 8081 8880 18080;do
+      if ! host_port_busy "$candidate";then NOVANEXUS_HTTP_PORT="$candidate";break;fi
+    done
+    [[ "$NOVANEXUS_HTTP_PORT" != 80 ]] || fail "No free HTTP fallback port was found."
+    log "HTTP port 80 is occupied; using port $NOVANEXUS_HTTP_PORT without touching the existing service."
+    log "For publicly trusted TLS with port 80 unavailable, Caddy needs external port 443 for TLS-ALPN-01 or an existing TLS proxy."
+  fi
+  [[ -n "$NOVANEXUS_TUNNEL_PORT" ]] || NOVANEXUS_TUNNEL_PORT=18081
+  valid_port "$NOVANEXUS_TUNNEL_PORT" || fail "Tunnel origin port must be 1024–65535."
+  if [[ "$NOVANEXUS_TUNNEL_PORT" == "$NOVANEXUS_HTTP_PORT" ]] || host_port_busy "$NOVANEXUS_TUNNEL_PORT";then
+    for candidate in 18081 18082 18083 28080 28081;do
+      if [[ "$candidate" != "$NOVANEXUS_HTTP_PORT" ]] && ! host_port_busy "$candidate";then NOVANEXUS_TUNNEL_PORT="$candidate";break;fi
+    done
+    [[ "$NOVANEXUS_TUNNEL_PORT" != "$NOVANEXUS_HTTP_PORT" ]] && ! host_port_busy "$NOVANEXUS_TUNNEL_PORT" ||
+      fail "No free tunnel origin port found."
+  fi
+  if host_port_busy 443;then
+    fail "HTTPS port 443 is already occupied. Preserving https://$NOVANEXUS_DOMAIN requires an available HTTPS listener or an existing reverse proxy/tunnel. An HTTP fallback port cannot replace HTTPS."
+  fi
+else
+  [[ -n "$NOVANEXUS_HTTP_PORT" ]] || NOVANEXUS_HTTP_PORT=80
+  [[ -n "$NOVANEXUS_TUNNEL_PORT" ]] || NOVANEXUS_TUNNEL_PORT=18081
 fi
+if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]] && ! valid_port "$NOVANEXUS_HTTP_PORT";then fail "Invalid saved HTTP port.";fi
+valid_port "$NOVANEXUS_TUNNEL_PORT" || fail "Invalid saved tunnel port."
+log "HTTP port $NOVANEXUS_HTTP_PORT; HTTPS port 443; local-only tunnel origin 127.0.0.1:$NOVANEXUS_TUNNEL_PORT"
 
 log "Fetching the selected NovaNexus source"
 if [[ "$RESUME_INSTALL" == 0 ]]; then
@@ -197,6 +246,9 @@ LIVEKIT_API_SECRET=$LIVEKIT_SECRET
 NOVANEXUS_DOMAIN=$NOVANEXUS_DOMAIN
 TLS_EMAIL=$NOVANEXUS_TLS_EMAIL
 NOVANEXUS_PUBLIC_DOMAIN=$NOVANEXUS_PUBLIC_DOMAIN
+NOVANEXUS_TUNNEL_DOMAIN=$NOVANEXUS_TUNNEL_DOMAIN
+NOVANEXUS_HTTP_PORT=$NOVANEXUS_HTTP_PORT
+NOVANEXUS_TUNNEL_PORT=$NOVANEXUS_TUNNEL_PORT
 EOF
 else
   stored_address=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' .env | head -n 1)
@@ -221,8 +273,8 @@ else
 fi
 # Synchronize the optional hostname on upgrades without touching credentials.
 # This supports changing a LAN deployment to dual LAN/internet access in-place.
-sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d; /^TLS_EMAIL=/d' .env
-printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\nTLS_EMAIL=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" "$NOVANEXUS_TLS_EMAIL" >>.env
+sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d; /^NOVANEXUS_TUNNEL_DOMAIN=/d; /^NOVANEXUS_HTTP_PORT=/d; /^NOVANEXUS_TUNNEL_PORT=/d; /^TLS_EMAIL=/d' .env
+printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\nNOVANEXUS_TUNNEL_DOMAIN=%s\nNOVANEXUS_HTTP_PORT=%s\nNOVANEXUS_TUNNEL_PORT=%s\nTLS_EMAIL=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" "$NOVANEXUS_TUNNEL_DOMAIN" "$NOVANEXUS_HTTP_PORT" "$NOVANEXUS_TUNNEL_PORT" "$NOVANEXUS_TLS_EMAIL" >>.env
 chmod 600 .env
 LIVEKIT_KEY=$(sed -n "s/^LIVEKIT_API_KEY=//p" .env | head -n1)
 LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
@@ -363,6 +415,13 @@ if [[ -n "$PUBLIC_HTTPS_HOST" ]]; then
 fi
 printf "\n==========================================\n"
 printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
+printf "Tunnel origin (local host only): http://127.0.0.1:%s\n" "$NOVANEXUS_TUNNEL_PORT"
+if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]];then
+  log "Existing service owns TCP 80. NovaNexus uses host HTTP port $NOVANEXUS_HTTP_PORT; the HTTPS GUI stays on port 443."
+fi
+if [[ -n "$NOVANEXUS_TUNNEL_DOMAIN" ]];then
+  printf "Tunnel public URL (requires your tunnel provider routing): https://%s/\n" "$NOVANEXUS_TUNNEL_DOMAIN"
+fi
 printf "==========================================\n"
 log "The local HTTPS endpoint passed its certificate and API checks. LAN reachability depends on your network/firewall."
 if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
