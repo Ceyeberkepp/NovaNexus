@@ -28,7 +28,7 @@ import (
 const cookieName = "novanexus_session"
 
 type Server struct { db *pgxpool.Pool; secure bool; limitMu sync.Mutex; attempts map[string][]time.Time }
-type User struct { ID int64; Name, Email, Username, Role string; JobTitle, Birthday, Avatar string; MustChange bool; MFAEnabled bool }
+type User struct { ID int64; Name, Email, Username, Role string; JobTitle, Birthday, Avatar, TermsVersion string; MustChange bool; MFAEnabled bool }
 type credentials struct { Email, Password, Code string }
 
 func validUsername(name string) bool {
@@ -60,12 +60,18 @@ func verifyPassword(p,stored string) bool {
 func respond(w http.ResponseWriter,status int,body any) {w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store");w.WriteHeader(status);_ =json.NewEncoder(w).Encode(body)}
 func fail(w http.ResponseWriter,code int,message string) {respond(w,code,map[string]any{"error":message})}
 func asJSON(r *http.Request,out any) error {r.Body=http.MaxBytesReader(nil,r.Body,16*1024);defer r.Body.Close();return json.NewDecoder(r.Body).Decode(out)}
-func (u User) data() map[string]any {return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email,"username":u.Username,"role":u.Role,"jobTitle":u.JobTitle,"birthday":u.Birthday,"avatar":u.Avatar,"mfa_enabled":u.MFAEnabled,"must_change_password":u.MustChange}}
+func (u User) data() map[string]any {return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email,"username":u.Username,"role":u.Role,"jobTitle":u.JobTitle,"birthday":u.Birthday,"avatar":u.Avatar,"mfa_enabled":u.MFAEnabled,"must_change_password":u.MustChange,"terms_required":u.TermsVersion!=termsVersion}}
 func cookie(token string,secure bool,maxAge int) *http.Cookie {return &http.Cookie{Name:cookieName,Value:token,Path:"/",HttpOnly:true,Secure:secure,SameSite:http.SameSiteStrictMode,MaxAge:maxAge}}
 func (s *Server) who(r *http.Request) (User,error) {
  c,err:=r.Cookie(cookieName);if err!=nil||len(c.Value)!=64{return User{},errors.New("not authenticated")}
  var u User
- err=s.db.QueryRow(r.Context(),`SELECT u.id,u.name,u.email,u.username,u.role,u.must_change_password,u.mfa_enabled,COALESCE(u.job_title,''),COALESCE(u.birthday,''),COALESCE(u.avatar,'') FROM sessions ss JOIN users u ON ss.user_id=u.id WHERE ss.token_hash=$1 AND ss.expires_at>NOW() AND u.active=TRUE`,tokenHash(c.Value)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&u.MFAEnabled,&u.JobTitle,&u.Birthday,&u.Avatar)
+ err=s.db.QueryRow(r.Context(),`SELECT u.id,u.name,u.email,u.username,u.role,u.must_change_password,u.mfa_enabled,COALESCE(u.job_title,''),COALESCE(u.birthday,''),COALESCE(u.avatar,''),COALESCE(u.terms_version,'') FROM sessions ss JOIN users u ON ss.user_id=u.id WHERE ss.token_hash=$1 AND ss.expires_at>NOW() AND u.active=TRUE`,tokenHash(c.Value)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&u.MFAEnabled,&u.JobTitle,&u.Birthday,&u.Avatar,&u.TermsVersion)
+ if err==nil&&u.TermsVersion!=termsVersion {
+  switch r.URL.Path {
+   case "/api/auth/change-password","/api/auth/me","/api/auth/logout","/api/terms":
+   default:return User{},errors.New("Terms of Use acknowledgment required")
+  }
+ }
  return u,err
 }
 func (s *Server) limited(r *http.Request, account string) bool {
@@ -82,7 +88,7 @@ func (s *Server) login(w http.ResponseWriter,r *http.Request) {
  var c credentials;if asJSON(r,&c)!=nil||len(c.Email)>254||len(c.Password)>1024 {fail(w,400,"Invalid credentials");return}
  if s.limited(r,c.Email){fail(w,429,"Too many attempts");return}
  var u User;var stored string
- err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,username,role,must_change_password,password_hash,mfa_enabled,COALESCE(job_title,''),COALESCE(birthday,''),COALESCE(avatar,'') FROM users WHERE (lower(email)=lower($1) OR lower(username)=lower($1)) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&stored,&u.MFAEnabled,&u.JobTitle,&u.Birthday,&u.Avatar)
+ err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,username,role,must_change_password,password_hash,mfa_enabled,COALESCE(job_title,''),COALESCE(birthday,''),COALESCE(avatar,''),COALESCE(terms_version,'') FROM users WHERE (lower(email)=lower($1) OR lower(username)=lower($1)) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&stored,&u.MFAEnabled,&u.JobTitle,&u.Birthday,&u.Avatar,&u.TermsVersion)
  if err!=nil||!verifyPassword(c.Password,stored){fail(w,401,"Invalid credentials");return}
  if u.MFAEnabled&&!s.verifySecondFactor(w,r,u.ID,c.Code){return}
  token:=randomHex(32)
@@ -180,6 +186,7 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/workspace/settings":s.workspaceSettingsAPI(w,r)
  case "/api/assistant/chat":s.aiAssistantAPI(w,r)
  case "/api/branding":publicBrandingAPI(s,w,r)
+ case "/api/terms":s.termsAPI(w,r)
  case "/api/admin/branding":s.adminBrandingAPI(w,r)
  case "/api/health":if e:=s.db.Ping(r.Context());e!=nil{fail(w,503,"Database unavailable")}else{respond(w,200,map[string]any{"status":"ok"})}
  case "/api/meetings/create":s.createMeetingAPI(w,r)
@@ -210,6 +217,8 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS birthday TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_pending_secret TEXT",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_last_step BIGINT NOT NULL DEFAULT 0",
