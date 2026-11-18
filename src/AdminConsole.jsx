@@ -17,7 +17,7 @@ export default function AdminConsole({users,setUsers}){
  const [loading,setLoading]=useState(false);
  const [resetTarget,setResetTarget]=useState(null);
  const [resetForm,setResetForm]=useState({newPassword:'',confirmPassword:'',adminPassword:'',requireChange:true});
- const [form,setForm]=useState({name:'',email:'',password:''});
+ const [form,setForm]=useState({name:'',username:'',email:'',password:''});
  const [settings,setSettings]=useState({workspace_name:'NovaNexus Workspace',default_meeting_limit:'1000',meeting_public_url:'',session_minutes:'480',waiting_room_enabled:'false',waiting_room_message:'Please wait for your host to admit you.',ai_enabled:'true'});
  const [logs,setLogs]=useState([]);
  const [groups,setGroups]=useState([]);
@@ -49,7 +49,7 @@ export default function AdminConsole({users,setUsers}){
  }
  async function createAccount(e){
   e.preventDefault();
-  await execute(async()=>{await provisionUser(form.name,form.email,form.password);setForm({name:'',email:'',password:''});});
+  await execute(async()=>{await provisionUser(form.name,form.email,form.password,form.username);setForm({name:'',username:'',email:'',password:''});});
  }
  async function updateAccount(user,changes){
   await execute(()=>adminRequest('users?id='+encodeURIComponent(user.id),{method:'PATCH',body:JSON.stringify(changes)}));
@@ -100,6 +100,7 @@ export default function AdminConsole({users,setUsers}){
       <form onSubmit={createAccount} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-5 h-fit">
        <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-3"><UserPlus size={17} className="text-indigo-600"/>Provision Identity</h2>
        <label className="block text-sm">Full name<input className={input} minLength={2} maxLength={120} required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>
+       <label className="block text-sm">Username (optional)<input className={input} autoComplete="off" minLength={3} maxLength={32} pattern="[A-Za-z0-9_-]{3,32}" placeholder="example: jsmith" value={form.username} onChange={e=>setForm({...form,username:e.target.value.toLowerCase()})}/><span className="text-xs text-slate-500">3–32 characters. If blank, a unique username is assigned.</span></label>
        <label className="block text-sm">Email<input className={input} type="email" required value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label>
        <label className="block text-sm">Temporary password (8+ characters)<input className={input} type="password" minLength={8} required value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label>
        <button className={btn} disabled={loading}>Create member</button>
@@ -164,16 +165,17 @@ export default function AdminConsole({users,setUsers}){
 function UserRow({user,busy,update,onReset}){
  const [name,setName]=useState(user.name);
  const [role,setRole]=useState(user.role);
+ const [username,setUsername]=useState(user.username||'');
  const [editing,setEditing]=useState(false);
- useEffect(()=>{setName(user.name);setRole(user.role)},[user.name,user.role]);
- async function save(){await update(user,{name,role});setEditing(false);}
+ useEffect(()=>{setName(user.name);setRole(user.role);setUsername(user.username||'')},[user.name,user.role]);
+ async function save(){await update(user,{name,role,username});setEditing(false);}
  const initials=String(user.name||'U').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();
  return <tr className="border-b border-slate-50 align-middle hover:bg-indigo-50/20">
-  <td className="p-5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{initials}</span><div>{editing?<input aria-label={'Name '+user.email} className={input} minLength={2} maxLength={120} value={name} onChange={e=>setName(e.target.value)}/>:<div className="text-xs font-bold text-slate-800">{user.name}</div>}<div className="mt-1 text-[10px] text-slate-400">{user.email}</div></div></div></td>
+  <td className="p-5"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white">{initials}</span><div>{editing?<input aria-label={'Name '+user.email} className={input} minLength={2} maxLength={120} value={name} onChange={e=>setName(e.target.value)}/>:<div className="text-xs font-bold text-slate-800">{user.name}</div>}<div className="mt-1 text-[10px] text-slate-400">{user.email}{user.username?` · @${user.username}`:""}</div>{editing&&<input aria-label={"Username "+user.email} className={input+" mt-2"} minLength={3} maxLength={32} pattern="[a-z0-9_-]{3,32}" value={username} onChange={e=>setUsername(e.target.value.toLowerCase())}/>}</div></div></td>
   <td className="p-5">{editing?<select aria-label={'Role '+user.email} className={input} value={role} onChange={e=>setRole(e.target.value)}><option>Regular</option><option>Admin</option></select>:<span className={'rounded-lg px-3 py-1.5 text-[9px] font-black uppercase '+(user.role==='Admin'?'bg-purple-50 text-purple-600':'bg-slate-100 text-slate-500')}>{user.role}</span>}</td>
   <td className="p-5"><span className={'text-[10px] font-bold '+(user.active===false?'text-rose-600':'text-green-600')}>{user.active===false?'Disabled':'Enabled'}</span></td>
   <td className="p-5"><div className="flex flex-wrap gap-3">
-   {editing?<><button disabled={busy||name.trim().length<2} className="text-xs font-black text-indigo-600" onClick={save}>Save</button><button className="text-xs text-slate-500" onClick={()=>{setEditing(false);setName(user.name);setRole(user.role)}}>Cancel</button></>:<button className="text-xs font-black text-indigo-600" disabled={busy} onClick={()=>setEditing(true)} aria-label={'Edit '+user.name}><Edit2 size={16}/></button>}
+   {editing?<><button disabled={busy||name.trim().length<2} className="text-xs font-black text-indigo-600" onClick={save}>Save</button><button className="text-xs text-slate-500" onClick={()=>{setEditing(false);setName(user.name);setRole(user.role);setUsername(user.username||'')}}>Cancel</button></>:<button className="text-xs font-black text-indigo-600" disabled={busy} onClick={()=>setEditing(true)} aria-label={'Edit '+user.name}><Edit2 size={16}/></button>}
    <button disabled={busy||user.active===false} title="Reset password" className="text-indigo-700 text-xs font-bold" onClick={()=>onReset(user)}>Reset password</button><button disabled={busy} className={'text-xs font-bold '+(user.active===false?'text-green-700':'text-rose-600')} onClick={()=>{if(window.confirm((user.active===false?'Enable ':'Disable ')+user.email+'?'))update(user,{active:user.active===false})}}>{user.active===false?'Enable':'Disable'}</button>
   </div></td>
  </tr>;
