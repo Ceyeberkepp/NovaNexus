@@ -27,5 +27,10 @@
 {$NOVANEXUS_DOMAIN} {
     import novanexus_routes
 }
+:443 {
+    # Accept Cloudflare's public HTTP Host header without a dashboard override.
+    # Reuse the existing HTTPS listener and its origin TLS certificate.
+    import novanexus_routes
+}
 # The installer renders this file. Keep it present even on LAN-only deployments.
 import /etc/caddy/additional-sites.caddy
