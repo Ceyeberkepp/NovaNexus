@@ -111,7 +111,7 @@ func (s *Server) workspaceSettingsAPI(w http.ResponseWriter,r *http.Request){
  for rows.Next(){var name,value string;if rows.Scan(&name,&value)==nil{settings[name]=value}}
  if rows.Err()!=nil{fail(w,500,"Settings unavailable");return}
  if settings["meeting_public_url"]=="" {
-  if publicDomain:=strings.TrimSpace(os.Getenv("NOVANEXUS_PUBLIC_DOMAIN")); publicDomain!="" {settings["meeting_public_url"]="https://"+publicDomain}
+  if publicDomain:=strings.TrimSpace(os.Getenv("NOVANEXUS_PUBLIC_DOMAIN")); publicDomain!="" {settings["meeting_public_url"]="https://"+publicDomain}else if tunnelDomain:=strings.TrimSpace(os.Getenv("NOVANEXUS_TUNNEL_DOMAIN")); tunnelDomain!="" {settings["meeting_public_url"]="https://"+tunnelDomain}
  }
  respond(w,200,map[string]any{"settings":settings})
 }
