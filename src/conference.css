@@ -1,0 +1,32 @@
+.nexus-conference-stage{position:relative;height:100%;width:100%;overflow:hidden;background:#090a0c;color:#f9fafb;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+.nexus-video-label{position:absolute;z-index:6;top:18px;left:20px;display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:8px 14px;background:rgba(23,23,23,.9);font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+.nexus-live-dot{background:#21bf74;display:block;width:7px;height:7px;border-radius:50%}.nexus-stage-count{color:#a1a1aa;font-size:10px;font-weight:500;letter-spacing:0;text-transform:none}
+.nexus-video-area{position:absolute;inset:0;padding:16px 16px 94px;display:flex;min-width:0;min-height:0}
+.nexus-video-area.nexus-with-drawer{right:min(340px,40vw)}
+.nexus-video-grid{height:100%!important;width:100%!important;display:grid!important;gap:12px!important;grid-auto-rows:minmax(0,1fr)!important;background:transparent!important}
+.nexus-conference-stage .lk-participant-tile{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;border:1px solid #38383b!important;border-radius:23px!important;background:#27272a!important;box-shadow:inset 0 0 34px rgba(0,0,0,.13)!important}
+.nexus-conference-stage .lk-participant-placeholder{background:radial-gradient(ellipse at 50% 50%,rgba(82,55,255,.15),transparent 55%)!important}
+.nexus-conference-stage .lk-participant-placeholder svg{color:#5636ed!important}
+.nexus-conference-stage .lk-participant-metadata{position:absolute!important;left:14px!important;bottom:12px!important;z-index:2!important;background:rgba(7,8,10,.78)!important;border-radius:6px!important;padding:7px 10px!important;color:white!important;font-weight:700!important;font-size:12px!important}
+.nexus-conference-stage .lk-participant-name{font-weight:700!important;color:white!important}
+.nexus-speaker-mode .lk-participant-tile:first-child{grid-column:span 2!important;grid-row:span 2!important}
+.nexus-float-toolbar{position:absolute;z-index:80;left:50%;bottom:27px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:12px 16px;background:rgba(23,23,25,.97);box-shadow:0 22px 60px rgba(0,0,0,.5);backdrop-filter:blur(18px)}
+.nexus-conference-stage .nexus-meeting-control{height:48px!important;width:48px!important;min-width:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:0!important;border-radius:999px!important;padding:0!important;background:#29292c!important;color:#fff!important;cursor:pointer!important}
+.nexus-conference-stage .nexus-meeting-control:hover,.nexus-conference-stage .nexus-meeting-control.nexus-active{background:#4f46e5!important}
+.nexus-conference-stage .nexus-meeting-control[data-lk-enabled="false"]{background:#e82e49!important}
+.nexus-conference-stage .nexus-meeting-control svg{height:19px!important;width:19px!important}
+.nexus-conference-stage .nexus-meeting-control span{display:none!important}
+.nexus-control-divider{width:1px;height:30px;margin:0 4px;background:#45454a}
+.nexus-end-call{display:flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:999px;height:47px;padding:0 23px;background:#d91035;color:#fff;font-size:12px;font-weight:850;cursor:pointer}
+.nexus-end-call:hover{background:#b60629}
+.nexus-meeting-drawer{position:absolute;z-index:40;right:0;top:0;bottom:0;width:min(340px,40vw);background:#1b1b1f;border-left:1px solid #3e3e44;display:flex;flex-direction:column}
+.nexus-drawer-head{padding:24px;border-bottom:1px solid #3b3b42;display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:800}
+.nexus-drawer-head button{background:transparent;border:0;color:white;cursor:pointer}
+.nexus-real-roster{padding:15px;overflow:auto}
+.nexus-roster-person{display:flex;gap:12px;align-items:center;padding:12px;border-bottom:1px solid #343438}
+.nexus-roster-avatar{height:35px;width:35px;display:grid;place-items:center;border-radius:50%;background:#5740e8;color:#fff;font-size:12px;font-weight:800}
+.nexus-roster-person strong{font-size:12px}.nexus-roster-person p{font-size:10px;color:#a1a1aa;margin-top:3px}
+.nexus-real-chat{flex:1;min-height:0;overflow:auto}
+.nexus-real-chat .lk-chat{height:100%;background:#1b1b1f;color:#fff}
+.nexus-real-chat .lk-chat-messages{color:#fff}
+@media(max-width:800px){.nexus-video-area{padding:12px 12px 98px}.nexus-video-area.nexus-with-drawer{right:0;display:none}.nexus-meeting-drawer{width:100%}.nexus-float-toolbar{gap:3px;padding:9px 10px;bottom:18px;max-width:calc(100vw - 20px)}.nexus-conference-stage .nexus-meeting-control{width:39px!important;height:39px!important;min-width:39px!important}.nexus-end-call{height:39px;padding:0 12px}.nexus-stage-count{display:none}}
