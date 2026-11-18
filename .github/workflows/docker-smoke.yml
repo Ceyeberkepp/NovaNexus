@@ -106,40 +106,16 @@ jobs:
           sleep 4
           docker compose ps --status running livekit | grep -q livekit
           docker compose logs --tail=30 livekit
-      - name: Verify alternate HTTP binding and LAN HTTPS origin
-        env:
-          NOVANEXUS_DOMAIN: "127.0.0.1"
-          NOVANEXUS_BIND_IP: "127.0.0.1"
-          NOVANEXUS_HTTP_PORT: "18088"
-          NOVANEXUS_TUNNEL_PORT: "18081"
-        run: |
-          set -euo pipefail
-          docker compose config --quiet
-          docker compose up -d --force-recreate https
-          for n in $(seq 1 20); do
-            if curl -fsS --noproxy "*" --cacert /tmp/novanexus-local-ca.crt https://127.0.0.1:18081/api/health | grep -q '"status":"ok"'; then
-              curl -fsS --noproxy "*" --cacert /tmp/novanexus-local-ca.crt https://127.0.0.1/api/health | grep -q '"status":"ok"'
-              curl -sS --noproxy "*" -I http://127.0.0.1:18088/ | grep -q '^HTTP/'
-              exit 0
-            fi
-            sleep 2
-          done
-          docker compose logs --tail=80 https
-          exit 1
-      - name: Diagnose Cloudflare HTTPS origin from appliance
-        env:
-          NOVANEXUS_DOMAIN: "127.0.0.1"
-          NOVANEXUS_BIND_IP: "127.0.0.1"
-          NOVANEXUS_HTTP_PORT: "18088"
-          NOVANEXUS_TUNNEL_PORT: "18081"
+      - name: Diagnose single Cloudflare HTTPS origin on port 443
         run: |
           set -euo pipefail
           bash -n scripts/check-cloudflare-origin.sh
           temp_root="$(mktemp -d)"
-          printf '%s\n' 'NOVANEXUS_DOMAIN=127.0.0.1' 'NOVANEXUS_BIND_IP=127.0.0.1' 'NOVANEXUS_TUNNEL_PORT=18081' > "$temp_root/.env"
+          printf '%s\n' 'NOVANEXUS_DOMAIN=127.0.0.1' > "$temp_root/.env"
           cp /tmp/novanexus-local-ca.crt "$temp_root/novanexus-local-root-ca.crt"
-          NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh | grep -q 'PASS: HTTPS origin'
+          NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh | grep -q 'PASS: Original HTTPS endpoint'
           rm -rf "$temp_root"
+          test "$(docker compose config --format json | python3 -c 'import sys,json; c=json.load(sys.stdin); print(len(c["services"]["https"]["ports"]))')" = "2"
       - name: Container logs on failure
         if: failure()
         run: docker compose logs --tail=100 app db
