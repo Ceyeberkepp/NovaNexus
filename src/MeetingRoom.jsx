@@ -1,5 +1,6 @@
 import React, {useEffect,useRef,useState} from 'react';
-import {LiveKitRoom, VideoConference, useRoomContext} from '@livekit/components-react';
+import {LiveKitRoom, useRoomContext} from '@livekit/components-react';
+import ConferenceStage from './ConferenceStage';
 import VideoSettings from './VideoSettings';
 import MeetingExtras from './MeetingExtras';
 import {readChatPreferences} from './ChatPreferences';
@@ -70,7 +71,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       onDisconnected={()=>{if(!switchingRef.current)leave();}}
       onError={(e)=>setError(e?.message||'Connection failed')}
       style={{height:'100%'}}>
-      <VideoConference />
+      <ConferenceStage roomId={roomId} onEnd={leave}/>
       <MeetingExtras shareUrl={shareUrl} roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>
       {showSettings&&<ConnectedSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
     </LiveKitRoom>
