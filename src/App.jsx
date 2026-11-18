@@ -1820,6 +1820,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('auth'); 
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [adminInitialTab,setAdminInitialTab] = useState('users');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [meetingRoom, setMeetingRoom] = useState(()=>/^\/[0-9]{8}\/?$/.test(window.location.pathname)?window.location.pathname.replaceAll('/',''):'');
   const [meetingOptions,setMeetingOptions]=useState({autoJoin:false,audioOnly:false,callId:null});
@@ -1919,7 +1920,7 @@ function App() {
                   user={user} 
                   onClose={() => setShowProfile(false)} 
                   onUpdate={handleUpdateProfile}
-                  onSecurity={() => setCurrentTab('security')}
+                  onSecurity={() => {setAdminInitialTab('security');setCurrentTab(user?.role==='Admin'?'admin':'security')}}
               />
           )}
 
@@ -1937,7 +1938,6 @@ function App() {
                 <NavItem icon={<LayoutGrid />} label="Overview" active={currentTab === 'dashboard'} onClick={() => setCurrentTab('dashboard')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<MessageCircle />} label="Chat" active={currentTab === 'chats'} onClick={() => setCurrentTab('chats')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Phone />} label="Calls" active={currentTab === 'calls'} onClick={() => setCurrentTab('calls')} collapsed={sidebarCollapsed} />
-                <NavItem icon={<ShieldCheck />} label="Account Security" active={currentTab === 'security'} onClick={() => setCurrentTab('security')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Sparkles />} label="AI Assistant" active={currentTab === 'ai'} onClick={() => setCurrentTab('ai')} collapsed={sidebarCollapsed} />
                 {user?.role === 'Admin' && <NavItem icon={<Shield />} label="Admin" active={currentTab === 'admin'} onClick={() => setCurrentTab('admin')} collapsed={sidebarCollapsed} />}
@@ -2075,7 +2075,7 @@ function App() {
                 {currentTab === 'security' && <AccountSecurity user={user} />}
                 {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
                 {currentTab === 'ai' && <WorkspaceAssistant />}
-                {currentTab === 'admin' && (user?.role === 'Admin' ? <AdminConsole users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
+                {currentTab === 'admin' && (user?.role === 'Admin' ? <AdminConsole users={users} setUsers={setUsers} initialTab={adminInitialTab} user={user} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
             </div>
           </main>
           
