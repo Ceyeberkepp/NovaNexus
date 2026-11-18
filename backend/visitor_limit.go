@@ -20,7 +20,8 @@ func (s *Server) guestLimited(w http.ResponseWriter,r *http.Request) bool {
  path:=r.URL.Path
  public:=path=="/"||path=="/api/branding"||path=="/api/terms"||strings.HasPrefix(path,"/assets/")||path=="/boot-health.js"
  if !public {return false}
- if c,e:=r.Cookie(cookieName);e==nil&&len(c.Value)==64{return false}
+ // Never trust a client-supplied session cookie as proof of authentication.
+ // Apply the inexpensive limit to all public assets and endpoints.
  peer,_,e:=net.SplitHostPort(r.RemoteAddr);if e!=nil{peer=r.RemoteAddr}
  if peer==""{peer="unknown"}
  client:=peer
