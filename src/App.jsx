@@ -1827,6 +1827,38 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
   const [siteLogo,setSiteLogo] = useState('');
+  const [visibleSiteLogo,setVisibleSiteLogo] = useState('');
+  // Older square logo uploads may contain substantial transparent padding.
+  // Trim only transparent edges at display time so existing saved logos fill the navigation header.
+  useEffect(()=>{
+    if(!siteLogo){setVisibleSiteLogo('');return;}
+    let active=true;
+    const logo=new Image();
+    logo.onload=()=>{
+      try{
+        const w=logo.naturalWidth,h=logo.naturalHeight;
+        if(!w||!h||w*h>12000000){if(active)setVisibleSiteLogo(siteLogo);return;}
+        const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext('2d',{willReadFrequently:true});
+        if(!ctx){if(active)setVisibleSiteLogo(siteLogo);return;}
+        ctx.drawImage(logo,0,0);
+        const pixels=ctx.getImageData(0,0,w,h).data;
+        let left=w,top=h,right=-1,bottom=-1;
+        for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+          if(pixels[(y*w+x)*4+3]>12){left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x);bottom=Math.max(bottom,y);}
+        }
+        if(right<left||bottom<top){if(active)setVisibleSiteLogo(siteLogo);return;}
+        const pad=Math.ceil(Math.max(right-left+1,bottom-top+1)*0.04);
+        left=Math.max(0,left-pad);top=Math.max(0,top-pad);right=Math.min(w-1,right+pad);bottom=Math.min(h-1,bottom+pad);
+        const trimmed=document.createElement('canvas');trimmed.width=right-left+1;trimmed.height=bottom-top+1;
+        trimmed.getContext('2d').drawImage(canvas,left,top,trimmed.width,trimmed.height,0,0,trimmed.width,trimmed.height);
+        if(active)setVisibleSiteLogo(trimmed.toDataURL('image/png'));
+      }catch{if(active)setVisibleSiteLogo(siteLogo);}
+    };
+    logo.onerror=()=>{if(active)setVisibleSiteLogo(siteLogo)};
+    logo.src=siteLogo;
+    return()=>{active=false};
+  },[siteLogo]);
   const [brandingVersion,setBrandingVersion] = useState(0);
   useEffect(()=>{const refresh=()=>setBrandingVersion(v=>v+1);window.addEventListener('novanexus:branding-changed',refresh);return()=>window.removeEventListener('novanexus:branding-changed',refresh);},[]);
   useEffect(()=>{if(!user||user.must_change_password)return;fetch('/api/branding',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d?.branding){setWorkspaceName(d.branding.workspace_name||'NovaNexus Workspace');setSiteLogo(d.branding.site_logo||'');document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});},[user,currentTab,brandingVersion]);
@@ -1929,9 +1961,9 @@ function App() {
                 {sidebarCollapsed ? <ChevronRight size={14}/> : <ArrowRight size={14} className="rotate-180"/>}
             </button>
             <div className="pt-8">
-              <div className={`flex items-center px-6 pb-12 overflow-hidden`}>
+              <div className={`flex items-center min-h-24 px-4 pb-8 overflow-hidden ${sidebarCollapsed?'justify-center':'justify-start'}`}>
                 {siteLogo
-                  ? <img src={siteLogo} alt={workspaceName} title={workspaceName} className={`max-h-14 w-full object-contain object-left ${sidebarCollapsed?'max-w-9':'max-w-[200px]'}`}/>
+                  ? <img src={visibleSiteLogo||siteLogo} alt={workspaceName} title={workspaceName} className={`block object-contain object-left ${sidebarCollapsed?'max-h-12 max-w-12':'max-h-24 w-full max-w-[224px]'}`}/>
                   : <span className={`font-black tracking-tight text-slate-900 truncate ${sidebarCollapsed?'text-base':'text-lg'}`} title={workspaceName}>{sidebarCollapsed?(workspaceName||'N').slice(0,2):workspaceName}</span>}
               </div>
               <nav className="px-3 space-y-1">
