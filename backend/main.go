@@ -82,7 +82,7 @@ func (s *Server) login(w http.ResponseWriter,r *http.Request) {
  var c credentials;if asJSON(r,&c)!=nil||len(c.Email)>254||len(c.Password)>1024 {fail(w,400,"Invalid credentials");return}
  if s.limited(r,c.Email){fail(w,429,"Too many attempts");return}
  var u User;var stored string
- err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,username,role,must_change_password,password_hash,mfa_enabled FROM users WHERE (lower(email)=lower($1) OR lower(username)=lower($1)) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&stored,&u.MFAEnabled)
+ err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,username,role,must_change_password,password_hash,mfa_enabled,COALESCE(job_title,''),COALESCE(birthday,''),COALESCE(avatar,'') FROM users WHERE (lower(email)=lower($1) OR lower(username)=lower($1)) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&stored,&u.MFAEnabled,&u.JobTitle,&u.Birthday,&u.Avatar)
  if err!=nil||!verifyPassword(c.Password,stored){fail(w,401,"Invalid credentials");return}
  if u.MFAEnabled&&!s.verifySecondFactor(w,r,u.ID,c.Code){return}
  token:=randomHex(32)
