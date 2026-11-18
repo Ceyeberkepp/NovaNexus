@@ -106,6 +106,24 @@ jobs:
           sleep 4
           docker compose ps --status running livekit | grep -q livekit
           docker compose logs --tail=30 livekit
+      - name: Verify alternate HTTP binding and localhost-only tunnel origin
+        env:
+          NOVANEXUS_HTTP_PORT: "18088"
+          NOVANEXUS_TUNNEL_PORT: "18081"
+        run: |
+          set -euo pipefail
+          docker compose config --quiet
+          docker compose up -d --force-recreate https
+          for n in $(seq 1 20); do
+            if curl -fsS --noproxy "*" http://127.0.0.1:18081/api/health | grep -q '"status":"ok"'; then
+              curl -fsS --noproxy "*" --resolve "127.0.0.1:443:127.0.0.1" --cacert /tmp/novanexus-local-ca.crt https://127.0.0.1/api/health | grep -q '"status":"ok"'
+              curl -sS --noproxy "*" -I http://127.0.0.1:18088/ | grep -q '^HTTP/'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --tail=80 https
+          exit 1
       - name: Container logs on failure
         if: failure()
         run: docker compose logs --tail=100 app db
