@@ -373,10 +373,12 @@ docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adap
 docker compose restart https >/dev/null || fail "Could not restart HTTPS proxy with updated configuration."
 log "Checking HTTPS certificate and application health"
 CURL_CA=()
+# The secondary HTTPS listener always uses a local CA, even when the primary
+# hostname has a publicly trusted certificate.
+CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
+docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
+chmod 644 "$CA_FILE"
 if [[ "$TLS_MODE" == internal ]]; then
-  CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
-  docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
-  chmod 644 "$CA_FILE"
   CURL_CA=(--cacert "$CA_FILE")
 fi
 verified=false
