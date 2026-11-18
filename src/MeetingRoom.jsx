@@ -9,7 +9,7 @@ import '@livekit/components-styles';
 
 // The built-in conference controls provide microphone, camera, screen sharing,
 // active-speaker layouts, in-room chat and a real leave button.
-export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=false}) {
+export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=false,initialConnection=null}) {
   const [maxParticipants,setMaxParticipants] = useState(1000);
   const [prefs,setPrefs] = useState(()=>readChatPreferences(user?.id||0));
   const [showSettings,setShowSettings] = useState(false);
@@ -19,11 +19,14 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
   const [meetingBaseURL,setMeetingBaseURL]=useState(window.location.origin);
   useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}const requested=String(data?.settings?.meeting_public_url||'');if(active&&requested.startsWith('https://'))setMeetingBaseURL(requested.replace(/\/$/ ,''));}).catch(()=>{});return ()=>{active=false;};},[]);
-  const [connection,setConnection] = useState(null);
+  const [connection,setConnection] = useState(initialConnection);
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(false);
   const [ended,setEnded] = useState(false);
   const [copyFeedback,setCopyFeedback] = useState('');
+  const [meetingPassword,setMeetingPassword] = useState('');
+  const [hostPassword,setHostPassword] = useState('');
+  const [passwordFeedback,setPasswordFeedback] = useState('');
   const shareUrl=meetingBaseURL+'/'+encodeURIComponent(roomId||'');
   async function copyInvite(){try{await navigator.clipboard.writeText(shareUrl);setCopyFeedback('Invite link copied.');}catch{setCopyFeedback('Select and copy the invite link below.');}}
 
@@ -42,7 +45,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
         method:'POST',
         credentials:'same-origin',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({room:roomId,maxParticipants:useServerCapacity?0:maxParticipants,breakoutID})
+        body:JSON.stringify({room:roomId,password:meetingPassword,maxParticipants:useServerCapacity?0:maxParticipants,breakoutID})
       });
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'Unable to join meeting');
@@ -62,7 +65,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
     await join(id,true);
     window.setTimeout(()=>{switchingRef.current=false;},1700);
   }
-  useEffect(()=>{if(autoJoin&&!autostartedRef.current&&/^[0-9]{8}$/.test(roomId)){autostartedRef.current=true;join(0,true);}},[autoJoin,roomId]);
+  useEffect(()=>{if(autoJoin&&!initialConnection&&!autostartedRef.current&&/^[0-9]{8}$/.test(roomId)){autostartedRef.current=true;join(0,true);}},[autoJoin,roomId]);
 
   if(connection&&!ended)return <div className="h-screen w-screen bg-zinc-950 text-white relative" data-lk-theme="default">
     <div className="absolute top-3 left-3 z-50 rounded-xl bg-zinc-900/90 border border-white/10 text-white p-2 flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold">Meeting: {roomId}{activeBreakoutId>0?` · Breakout ${activeBreakoutId}`:""}</span>{copyFeedback&&<span role="status">{copyFeedback}</span>}</div>
@@ -84,7 +87,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       }}
       style={{height:'100%'}}>
       <ConferenceStage roomId={roomId} onEnd={leave}/>
-      <MeetingExtras shareUrl={shareUrl} roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>
+      {!user?.isGuest&&<MeetingExtras shareUrl={shareUrl} roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>}
       {showSettings&&<ConnectedSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
     </LiveKitRoom>
     {error&&<div role="alert" className="fixed bottom-6 left-6 z-50 bg-red-800 text-white p-3 rounded-lg">{error}</div>}
@@ -95,6 +98,20 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       <div className="text-slate-300">Room: <strong>{roomId}</strong></div>
       <div className="text-slate-300">Signed in as {user?.name||'Member'}</div><button className="rounded-lg border border-slate-500 px-4 py-2 text-sm" onClick={()=>setShowSettings(true)}>Video &amp; Audio Settings</button>
       <label className="grid gap-2 text-sm">Share meeting link<input aria-label="Meeting invitation link" readOnly className="w-full min-w-0 rounded-lg border border-slate-600 bg-white p-3 text-sm font-semibold text-slate-900" value={shareUrl}/></label><button type="button" onClick={copyInvite} className="rounded-lg border border-slate-500 px-4 py-2 text-sm">Copy meeting link</button>{copyFeedback&&<p role="status" className="text-sm text-slate-300">{copyFeedback}</p>}
+      {!user?.isGuest&&<label className="grid gap-2 text-sm">Meeting password (if required)
+        <input type="password" autoComplete="off" value={meetingPassword} onChange={e=>setMeetingPassword(e.target.value)} className="rounded-lg border border-slate-600 bg-white p-3 text-slate-900"/>
+      </label>}
+      {!user?.isGuest&&<form className="space-y-2" onSubmit={async e=>{
+        e.preventDefault();setPasswordFeedback('');
+        const r=await fetch('/api/meetings/password',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:roomId,password:hostPassword})});
+        const d=await r.json().catch(()=>({}));setPasswordFeedback(r.ok?'Meeting password updated.':d.error||'Unable to update meeting password');
+      }}>
+        <label className="grid gap-2 text-sm">Host: set or remove meeting password
+          <input type="password" autoComplete="new-password" minLength={6} value={hostPassword} onChange={e=>setHostPassword(e.target.value)} placeholder="6+ characters; leave blank to remove" className="rounded-lg border border-slate-600 bg-white p-3 text-slate-900"/>
+        </label>
+        <button type="submit" className="rounded-lg border border-slate-500 px-4 py-2 text-sm">Update password (host only)</button>
+        {passwordFeedback&&<p role="status">{passwordFeedback}</p>}
+      </form>}
       <label className="grid gap-2 font-medium" htmlFor="meeting-limit">
         Maximum participants (1–{workspaceLimit})
         <input id="meeting-limit" className="w-full rounded-lg border border-slate-600 bg-white p-3 font-semibold text-slate-900"

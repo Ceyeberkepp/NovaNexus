@@ -193,6 +193,8 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/meetings/breakouts":s.breakoutAPI(w,r)
  case "/api/calls":s.callsAPI(w,r)
  case "/api/meetings/token":s.meetingTokenAPI(w,r)
+ case "/api/meetings/guest-token":s.guestMeetingTokenAPI(w,r)
+ case "/api/meetings/password":s.meetingPasswordAPI(w,r)
  case "/api/messages/recent":s.recentMessagesAPI(w,r)
  case "/api/messages":s.messagesAPI(w,r)
  case "/api/messages/attachment":s.messageAttachmentAPI(w,r)
@@ -234,6 +236,7 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "CREATE TABLE IF NOT EXISTS message_attachments (message_id BIGINT PRIMARY KEY REFERENCES direct_messages(id) ON DELETE CASCADE,filename TEXT NOT NULL,content_type TEXT NOT NULL,content BYTEA NOT NULL,size_bytes INT NOT NULL)",
   "CREATE INDEX IF NOT EXISTS direct_messages_pair_idx ON direct_messages(sender_id,recipient_id,id DESC)",
   "CREATE TABLE IF NOT EXISTS meeting_rooms (room VARCHAR(8) PRIMARY KEY CHECK(room ~ '^[0-9]{8}$'),owner_id BIGINT NOT NULL REFERENCES users(id),kind TEXT NOT NULL DEFAULT 'normal' CHECK(kind IN ('normal','call')),closed BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
+  "ALTER TABLE meeting_rooms ADD COLUMN IF NOT EXISTS guest_password_hash TEXT NOT NULL DEFAULT ''",
   "CREATE TABLE IF NOT EXISTS direct_calls (id BIGSERIAL PRIMARY KEY,caller_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),room VARCHAR(8) NOT NULL UNIQUE REFERENCES meeting_rooms(room),status TEXT NOT NULL DEFAULT 'ringing' CHECK(status IN ('ringing','accepted','declined','missed','canceled','ended')),audio_only BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),expires_at TIMESTAMPTZ NOT NULL)",
   "ALTER TABLE direct_calls ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ",
   "ALTER TABLE direct_calls ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ",
