@@ -44,6 +44,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run check
+      - name: Verify local and Cloudflare call signaling origins
+        run: node --test tests/meeting-origin.test.mjs
       - name: Verify Go backend
         run: |
           go mod tidy
