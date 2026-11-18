@@ -11,7 +11,7 @@ BIND_IP="$(get_env NOVANEXUS_BIND_IP)"
 PORT="$(get_env NOVANEXUS_TUNNEL_PORT)"
 PORT="${PORT:-18081}"
 CA="$ROOT_DIR/novanexus-local-root-ca.crt"
-if [[ ! "$PORT" =~ ^[0-9]{4,5}$ || "$PORT" -gt 65535 || ! "$BIND_IP" =~ ^[0-9]{1,3}(\\.[0-9]{1,3}){3}$ || -z "$DOMAIN" ]];then
+if [[ ! "$PORT" =~ ^[0-9]{4,5}$ || "$PORT" -gt 65535 || ! "$BIND_IP" =~ ^[0-9]{1,3}([.][0-9]{1,3}){3}$ || -z "$DOMAIN" ]];then
  echo "[NovaNexus] Invalid saved origin address. Re-run the current installer." >&2;exit 2
 fi
 printf '[NovaNexus] Expected Cloudflare Tunnel Service URL: https://%s:%s\n' "$BIND_IP" "$PORT"
