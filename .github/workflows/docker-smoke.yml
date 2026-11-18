@@ -54,6 +54,13 @@ jobs:
           done
           docker compose logs --tail=100 app db
           exit 1
+      - name: Verify frontend startup and missing asset behavior
+        run: |
+          set -euo pipefail
+          docker compose exec -T app wget -qO- http://127.0.0.1:3000/ | grep -q 'nova-startup'
+          docker compose exec -T app wget -qO- http://127.0.0.1:3000/boot-health.js | grep -q 'could not load'
+          response=$(docker compose exec -T app wget -S -O /dev/null http://127.0.0.1:3000/assets/missing-file.js 2>&1 || true)
+          printf '%s' "$response" | grep -q '404'
       - name: Verify IP-only HTTPS with local CA
         run: |
           set -euo pipefail
