@@ -575,9 +575,10 @@ const ProfileSettingsModal = ({ user, onClose, onUpdate, onSecurity }) => {
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  return <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
-  <section role="dialog" aria-modal="true" aria-label="Edit your profile" className="w-full max-w-lg max-h-[90vh] overflow-auto rounded-[2rem] bg-white p-7 shadow-2xl">
-   <header className="flex items-center justify-between mb-6"><h2 className="text-xl font-black text-slate-900">My Profile</h2><button type="button" aria-label="Close profile" onClick={onClose} className="rounded-full p-2 hover:bg-slate-100"><X size={20}/></button></header>
-   <form className="space-y-4" onSubmit={save}>
+  <section role="dialog" aria-modal="true" aria-label="Edit your profile" className="flex w-full max-w-lg max-h-[min(90vh,760px)] flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+   <header className="flex shrink-0 items-center justify-between border-b border-slate-100 px-7 py-5"><h2 className="text-xl font-black text-slate-900">My Profile</h2><button type="button" aria-label="Close profile" onClick={onClose} className="rounded-full p-2 hover:bg-slate-100"><X size={20}/></button></header>
+   <form className="flex min-h-0 flex-col" onSubmit={save}>
+    <div className="nexus-profile-scroll min-h-0 space-y-4 overflow-y-auto overscroll-contain px-7 py-6">
     <div className="flex flex-col items-center gap-3">
      <UserAvatar name={form.name} src={form.avatar} className="w-20 h-20"/>
      <label className="cursor-pointer text-sm font-semibold text-indigo-700">Change profile photo<input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={uploadPicture}/></label>
@@ -589,7 +590,8 @@ const ProfileSettingsModal = ({ user, onClose, onUpdate, onSecurity }) => {
     <label className="block text-sm font-semibold text-slate-700">Email address<input disabled className={input+' mt-2 opacity-70'} value={user?.email||''} readOnly/></label>
     <button type="button" onClick={()=>{onClose();onSecurity()}} className="flex items-center gap-2 text-indigo-700 font-semibold text-sm"><ShieldCheck size={17}/> Password and two-factor authentication</button>
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
-    <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose} className="rounded-xl border px-5 py-3 text-sm font-bold">Cancel</button><button disabled={busy||form.name.trim().length<2} className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">{busy?'Saving...':'Save changes'}</button></div>
+    </div>
+    <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 bg-white px-7 py-4"><button type="button" onClick={onClose} className="rounded-xl border px-5 py-3 text-sm font-bold">Cancel</button><button disabled={busy||form.name.trim().length<2} className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">{busy?'Saving...':'Save changes'}</button></div>
    </form>
   </section>
  </div>;
