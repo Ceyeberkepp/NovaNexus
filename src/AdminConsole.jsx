@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {Users,Shield,Calendar,Image as ImageIcon,ScrollText,Settings,Save,RefreshCw,Sparkles,Clock,UserPlus,Edit2,Search,Download} from 'lucide-react';
 import {fetchUsers,provisionUser} from './auth-client';
+import AccountSecurity from './AccountSecurity';
 
 async function adminRequest(path,options={}){
  const res=await fetch('/api/admin/'+path,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
@@ -11,8 +12,9 @@ async function adminRequest(path,options={}){
 const input='w-full rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none';
 const btn='rounded-xl bg-indigo-600 px-5 py-3 text-[11px] font-black uppercase tracking-widest text-white hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-100';
 const tabs=[['users','Users',Users],['groups','Groups',Users],['security','Security',Shield],['meetings','Meetings',Calendar],['branding','Branding',ImageIcon],['logs','Logs',ScrollText],['ai','AI Assistant',Sparkles]];
-export default function AdminConsole({users,setUsers}){
- const [tab,setTab]=useState('users');
+export default function AdminConsole({users,setUsers,initialTab='users',user}){
+ const [tab,setTab]=useState(initialTab);
+ useEffect(()=>{setTab(initialTab)},[initialTab]);
  const [notice,setNotice]=useState('');
  const [loading,setLoading]=useState(false);
  const [resetTarget,setResetTarget]=useState(null);
@@ -27,8 +29,8 @@ export default function AdminConsole({users,setUsers}){
  useEffect(()=>{refresh();},[]);
  async function refresh(){
   try{
-   const [directory,config,audit,groupData]=await Promise.all([adminRequest('directory'),adminRequest('settings'),adminRequest('logs'),adminRequest('groups')]);
-   setUsers(directory.users);setSettings({...settings,...config.settings});setLogs(audit.events);setGroups(groupData.groups);
+   const [directory,config,audit,groupData,brandResponse]=await Promise.all([adminRequest('directory'),adminRequest('settings'),adminRequest('logs'),adminRequest('groups'),fetch('/api/branding',{credentials:'same-origin'}).then(async r=>{if(!r.ok)throw Error('Unable to load branding');return r.json()})]);
+   setUsers(directory.users);setSettings(previous=>({...previous,...config.settings,...brandResponse.branding}));setLogs(audit.events);setGroups(groupData.groups);
   }catch(e){setNotice(e.message);}
  }
  async function execute(fn){
@@ -62,13 +64,30 @@ export default function AdminConsole({users,setUsers}){
  }
  async function uploadBranding(e,key){
   const file=e.target.files?.[0];if(!file)return;
-  if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>128*1024){
-   setNotice('Choose a PNG, JPEG or WebP image no larger than 128 KB.');return;
-  }
-  const reader=new FileReader();
-  reader.onload=()=>execute(()=>adminRequest('branding',{method:'PUT',body:JSON.stringify({key,data:String(reader.result||'')})}));
-  reader.onerror=()=>setNotice('Could not read image file.');
-  reader.readAsDataURL(file);
+  const targets={site_logo:[256,256],login_logo:[640,320],favicon:[64,64],waiting_logo:[320,320]};
+  if(!targets[key])return;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type)){setNotice('Choose a PNG, JPEG or WebP image.');return}
+  setLoading(true);setNotice('Processing image...');
+  try{
+   const bitmap=await createImageBitmap(file);
+   const [w,h]=targets[key];
+   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+   const context=canvas.getContext('2d');if(!context)throw Error('Browser image resizing unavailable');
+   const scale=Math.min(w/bitmap.width,h/bitmap.height);
+   const outputWidth=Math.max(1,Math.round(bitmap.width*scale)),outputHeight=Math.max(1,Math.round(bitmap.height*scale));
+   context.clearRect(0,0,w,h);
+   context.drawImage(bitmap,Math.round((w-outputWidth)/2),Math.round((h-outputHeight)/2),outputWidth,outputHeight);
+   bitmap.close();
+   let encoded=canvas.toDataURL('image/png');
+   if(encoded.length>130000)encoded=canvas.toDataURL('image/webp',0.84);
+   if(encoded.length>170000)encoded=canvas.toDataURL('image/webp',0.64);
+   if(encoded.length>170000)throw Error('Image remains too large after conversion. Try a simpler logo.');
+   await adminRequest('branding',{method:'PUT',body:JSON.stringify({key,data:encoded})});
+   await refresh();
+   window.dispatchEvent(new Event('novanexus:branding-changed'));
+   setNotice('Image converted, uploaded and saved successfully.');
+  }catch(error){setNotice(error.message||'Could not process image')}
+  finally{setLoading(false);e.target.value=''}
  }
  async function clearBranding(key){await execute(()=>adminRequest('branding',{method:'PUT',body:JSON.stringify({key,data:''})}));}
 
@@ -126,8 +145,9 @@ export default function AdminConsole({users,setUsers}){
      </div>
    </div>}
     {tab==='security'&&<div className="grid md:grid-cols-2 gap-8">
-       <form onSubmit={saveSettings} className="rounded-[2.5rem] bg-white border border-slate-100 shadow-sm p-9 space-y-5"><h2 className="font-bold">Access policies</h2><p className="text-sm">Password minimum: <strong>8 characters</strong></p><label className="block text-sm">Session timeout (5–480 minutes)<input className={input} type="number" min="5" max="480" required value={settings.session_minutes} onChange={e=>setSettings({...settings,session_minutes:e.target.value})}/></label><p className="text-xs text-slate-500">Applies to new sign-ins. Active sessions retain their existing expiration. Role or account-status changes revoke affected sessions.</p><p className="text-sm">Administrator session revocation on role change: <strong>Enabled</strong></p><p className="text-sm text-slate-500">Members can enable TOTP two-factor authentication under Account Security, with one-use recovery codes. Organization-wide MFA enforcement is not enabled yet.</p><button className={btn} disabled={loading}>Save security settings</button></form>
+       <form onSubmit={saveSettings} className="rounded-[2.5rem] bg-white border border-slate-100 shadow-sm p-9 space-y-5"><h2 className="font-bold">Access policies</h2><p className="text-sm">Password minimum: <strong>8 characters</strong></p><label className="block text-sm">Session timeout (5–480 minutes)<input className={input} type="number" min="5" max="480" required value={settings.session_minutes} onChange={e=>setSettings({...settings,session_minutes:e.target.value})}/></label><p className="text-xs text-slate-500">Applies to new sign-ins. Active sessions retain their existing expiration. Role or account-status changes revoke affected sessions.</p><p className="text-sm">Administrator session revocation on role change: <strong>Enabled</strong></p><p className="text-sm text-slate-500">Configure your own authenticator below. Organization-wide MFA enforcement is not yet enabled.</p><button className={btn} disabled={loading}>Save security settings</button></form>
        <div className="rounded-[2.5rem] bg-white border border-slate-100 shadow-sm p-9"><h2 className="font-bold mb-4">Security activity</h2><p className="text-sm">{logs.length} recent administrative events.</p><button className={btn+' mt-4'} onClick={()=>setTab('logs')}>View audit log</button></div>
+       <div className="md:col-span-2"><AccountSecurity user={user} embedded /></div>
     </div>}
     {(tab==='meetings'||tab==='branding')&&<form className="max-w-5xl rounded-[2.5rem] bg-white border border-slate-100 shadow-sm p-8 space-y-6" onSubmit={saveSettings}>
       <h2 className="font-bold">{tab==='meetings'?'Meeting defaults':'Workspace branding'}</h2>
@@ -174,7 +194,7 @@ export default function AdminConsole({users,setUsers}){
                 {settings[key]&&<button type="button" className="mt-2 text-[10px] font-bold text-rose-600" onClick={()=>clearBranding(key)}>Remove</button>}
               </div>)}
           </div>
-          <p className="text-xs text-slate-500">PNG, JPEG, or WebP, maximum 128 KB. All assets are saved to the real workspace; no demonstration logos are inserted.</p>
+          <p className="text-xs text-slate-500">Upload PNG, JPEG or WebP at any resolution. Nexus automatically resizes the image to fit its destination, preserving proportions, and saves the converted asset.</p>
         </div>}
       <button className={btn+' flex items-center gap-2'} disabled={loading}><Save size={16}/> Save changes</button>
     </form>}

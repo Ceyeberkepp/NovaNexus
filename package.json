@@ -16,7 +16,8 @@
     "react-dom": "^19.0.0",
     "@livekit/components-react": "^2.9.25",
     "@livekit/components-styles": "^1.2.0",
-    "livekit-client": "^2.24.1"
+    "livekit-client": "^2.24.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",

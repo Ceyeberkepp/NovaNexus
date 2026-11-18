@@ -170,22 +170,13 @@ systemctl enable --now docker
 docker info >/dev/null 2>&1 || fail "Docker daemon is not available."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required."
 
-# A local tunnel origin is always bound to 127.0.0.1, never public interfaces.
+# The optional second TLS listener binds to the appliance LAN IP, not an HTTP loopback.
 # If another service occupies port 80, use an unoccupied host HTTP port.
 # This does not change the LAN HTTPS URL (port 443).
 host_port_busy(){
   local port="${1:-}"
   [[ "$port" =~ ^[0-9]{1,5}$ ]] || return 2
-  # Match the exact listener port (IPv4 or IPv6). A substring match can
-  # confuse 80 with 8080, or 443 with 1443.
-  ss -H -ltn | awk -v port="$port" '
-    {
-      address=$4
-      sub(/^.*:/, "", address)
-      if (address == port) found=1
-    }
-    END { exit !found }
-  '
+  ss -H -ltn | awk -v port="$port" '{address=$4;sub(/^.*:/,"",address);if(address==port)found=1} END {exit !found}'
 }
 valid_port(){
   [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1024 && 10#$1 <= 65535 ))
@@ -227,7 +218,10 @@ else
 fi
 if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]] && ! valid_port "$NOVANEXUS_HTTP_PORT";then fail "Invalid saved HTTP port.";fi
 valid_port "$NOVANEXUS_TUNNEL_PORT" || fail "Invalid saved tunnel port."
-log "HTTP port $NOVANEXUS_HTTP_PORT; HTTPS port 443; local-only tunnel origin 127.0.0.1:$NOVANEXUS_TUNNEL_PORT"
+NOVANEXUS_BIND_IP="$LAN_IP"
+if valid_ipv4 "$NOVANEXUS_DOMAIN"; then NOVANEXUS_BIND_IP="$NOVANEXUS_DOMAIN"; fi
+valid_ipv4 "$NOVANEXUS_BIND_IP" || fail "Cannot determine an IPv4 LAN address for the secondary HTTPS listener."
+log "HTTP redirect port $NOVANEXUS_HTTP_PORT; HTTPS ports 443 and $NOVANEXUS_TUNNEL_PORT on $NOVANEXUS_BIND_IP"
 
 log "Fetching the selected NovaNexus source"
 if [[ "$RESUME_INSTALL" == 0 ]]; then
@@ -260,6 +254,7 @@ NOVANEXUS_PUBLIC_DOMAIN=$NOVANEXUS_PUBLIC_DOMAIN
 NOVANEXUS_TUNNEL_DOMAIN=$NOVANEXUS_TUNNEL_DOMAIN
 NOVANEXUS_HTTP_PORT=$NOVANEXUS_HTTP_PORT
 NOVANEXUS_TUNNEL_PORT=$NOVANEXUS_TUNNEL_PORT
+NOVANEXUS_BIND_IP=$NOVANEXUS_BIND_IP
 EOF
 else
   stored_address=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' .env | head -n 1)
@@ -284,8 +279,8 @@ else
 fi
 # Synchronize the optional hostname on upgrades without touching credentials.
 # This supports changing a LAN deployment to dual LAN/internet access in-place.
-sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d; /^NOVANEXUS_TUNNEL_DOMAIN=/d; /^NOVANEXUS_HTTP_PORT=/d; /^NOVANEXUS_TUNNEL_PORT=/d; /^TLS_EMAIL=/d' .env
-printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\nNOVANEXUS_TUNNEL_DOMAIN=%s\nNOVANEXUS_HTTP_PORT=%s\nNOVANEXUS_TUNNEL_PORT=%s\nTLS_EMAIL=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" "$NOVANEXUS_TUNNEL_DOMAIN" "$NOVANEXUS_HTTP_PORT" "$NOVANEXUS_TUNNEL_PORT" "$NOVANEXUS_TLS_EMAIL" >>.env
+sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d; /^NOVANEXUS_TUNNEL_DOMAIN=/d; /^NOVANEXUS_HTTP_PORT=/d; /^NOVANEXUS_TUNNEL_PORT=/d; /^NOVANEXUS_BIND_IP=/d; /^TLS_EMAIL=/d' .env
+printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\nNOVANEXUS_TUNNEL_DOMAIN=%s\nNOVANEXUS_HTTP_PORT=%s\nNOVANEXUS_TUNNEL_PORT=%s\nNOVANEXUS_BIND_IP=%s\nTLS_EMAIL=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" "$NOVANEXUS_TUNNEL_DOMAIN" "$NOVANEXUS_HTTP_PORT" "$NOVANEXUS_TUNNEL_PORT" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TLS_EMAIL" >>.env
 chmod 600 .env
 LIVEKIT_KEY=$(sed -n "s/^LIVEKIT_API_KEY=//p" .env | head -n1)
 LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
@@ -378,10 +373,12 @@ docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adap
 docker compose restart https >/dev/null || fail "Could not restart HTTPS proxy with updated configuration."
 log "Checking HTTPS certificate and application health"
 CURL_CA=()
+# The secondary HTTPS listener always uses a local CA, even when the primary
+# hostname has a publicly trusted certificate.
+CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
+docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
+chmod 644 "$CA_FILE"
 if [[ "$TLS_MODE" == internal ]]; then
-  CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
-  docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
-  chmod 644 "$CA_FILE"
   CURL_CA=(--cacert "$CA_FILE")
 fi
 verified=false
@@ -405,22 +402,19 @@ if [[ "$verified" != true ]]; then
   docker compose logs --tail=60 https app db >&2 || true
   fail "Local HTTPS health verification failed. Proxy settings, certificate mismatch or application health may be responsible; inspect the error above."
 fi
-# Verify the HTTP origin intended for a local tunnel agent.
-# It is bound to 127.0.0.1 by Docker Compose and never requires port 80.
-TUNNEL_ORIGIN_VERIFIED=false
+# Verify the secondary HTTPS listener on the appliance IP, with the local CA.
+SECONDARY_HTTPS_VERIFIED=false
 for tunnel_attempt in 1 2 3 4 5; do
-  if curl --noproxy "*" --fail --silent --show-error --connect-timeout 3 --max-time 7 "http://127.0.0.1:$NOVANEXUS_TUNNEL_PORT/api/health" 2>/dev/null | grep -q '"status":"ok"'; then
-    TUNNEL_ORIGIN_VERIFIED=true
+  if curl --noproxy "*" --fail --silent --show-error --connect-timeout 3 --max-time 7 --cacert "$CA_FILE" --resolve "$NOVANEXUS_DOMAIN:$NOVANEXUS_TUNNEL_PORT:$NOVANEXUS_BIND_IP" "https://$NOVANEXUS_DOMAIN:$NOVANEXUS_TUNNEL_PORT/api/health" 2>/dev/null | grep -q '"status":"ok"'; then
+    SECONDARY_HTTPS_VERIFIED=true
     break
   fi
   sleep 2
 done
-if [[ "$TUNNEL_ORIGIN_VERIFIED" == true ]]; then
-  log "Local tunnel origin passed its API health check."
-elif [[ -n "$NOVANEXUS_TUNNEL_DOMAIN" ]]; then
-  fail "Configured tunnel origin is not healthy on loopback port $NOVANEXUS_TUNNEL_PORT."
+if [[ "$SECONDARY_HTTPS_VERIFIED" == true ]]; then
+  log "Additional LAN HTTPS port passed certificate and API health checks."
 else
-  log "WARNING: Optional loopback tunnel origin did not pass verification."
+  fail "Additional HTTPS listener is not healthy on $NOVANEXUS_BIND_IP:$NOVANEXUS_TUNNEL_PORT."
 fi
 # A local loopback request verifies that Caddy can present a publicly trusted
 # certificate for the optional hostname. This is NOT an outside-network test.
@@ -443,7 +437,7 @@ if [[ -n "$PUBLIC_HTTPS_HOST" ]]; then
 fi
 printf "\n==========================================\n"
 printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
-printf "Tunnel origin (local host only): http://127.0.0.1:%s\n" "$NOVANEXUS_TUNNEL_PORT"
+printf "Additional HTTPS endpoint: https://%s:%s/\n" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TUNNEL_PORT"
 if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]];then
   log "Existing service owns TCP 80. NovaNexus uses host HTTP port $NOVANEXUS_HTTP_PORT; the HTTPS GUI stays on port 443."
 fi

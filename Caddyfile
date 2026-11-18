@@ -26,10 +26,10 @@
 {$NOVANEXUS_DOMAIN} {
     import novanexus_routes
 }
-# Local-only HTTP origin for a tunnel agent running on this same host.
-# Never bind host port 8088/18080 to 0.0.0.0 or forward it from the router.
-# The public tunnel edge supplies HTTPS; this connection is localhost only.
-http://:8088 {
+# Optional second HTTPS listener, reachable on the appliance LAN IP and configured port.
+# The installer uses an internal certificate to avoid exposing an HTTP origin.
+{$NOVANEXUS_DOMAIN}:8443 {
+    tls internal
     import novanexus_routes
 }
 # The installer renders this file. Keep it present even on LAN-only deployments.
