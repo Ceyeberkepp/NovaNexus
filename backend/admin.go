@@ -23,13 +23,13 @@ func (s *Server) audit(r *http.Request,actor int64,event,target string){
 func (s *Server) adminDirectoryAPI(w http.ResponseWriter,r *http.Request){
  _,ok:=s.administrator(w,r);if !ok{return}
  if r.Method!="GET"{fail(w,405,"Method not allowed");return}
- rows,e:=s.db.Query(r.Context(),"SELECT id,name,email,role,active,must_change_password FROM users ORDER BY name LIMIT 1000")
+ rows,e:=s.db.Query(r.Context(),"SELECT id,name,email,username,role,active,must_change_password,mfa_enabled FROM users ORDER BY name LIMIT 1000")
  if e!=nil{fail(w,500,"Directory unavailable");return}
  defer rows.Close()
  users:=make([]map[string]any,0)
- for rows.Next(){var id int64;var name,email,role string;var active,change bool
-   if rows.Scan(&id,&name,&email,&role,&active,&change)!=nil{fail(w,500,"Directory unavailable");return}
-   users=append(users,map[string]any{"id":id,"name":name,"email":email,"role":role,"active":active,"must_change_password":change})
+ for rows.Next(){var id int64;var name,email,username,role string;var active,change,mfaEnabled bool
+   if rows.Scan(&id,&name,&email,&username,&role,&active,&change,&mfaEnabled)!=nil{fail(w,500,"Directory unavailable");return}
+   users=append(users,map[string]any{"id":id,"name":name,"email":email,"username":username,"role":role,"mfa_enabled":mfaEnabled,"active":active,"must_change_password":change})
  }
  if rows.Err()!=nil{fail(w,500,"Directory unavailable");return}
  respond(w,200,map[string]any{"users":users})
@@ -38,9 +38,10 @@ func (s *Server) adminUsersAPI(w http.ResponseWriter,r *http.Request){
  actor,ok:=s.administrator(w,r);if !ok{return}
  id,e:=strconv.ParseInt(r.URL.Query().Get("id"),10,64)
  if e!=nil||id<=0{fail(w,400,"Valid user ID required");return}
- var c struct{Name,Role string;Active *bool}
+ var c struct{Name,Role,Username string;Active *bool}
  if r.Method!="PATCH"||asJSON(r,&c)!=nil{fail(w,400,"Expected PATCH JSON");return}
  if c.Name!=""&&(len(strings.TrimSpace(c.Name))<2||len(c.Name)>120){fail(w,400,"Name must be 2–120 characters");return}
+ if c.Username!=""&&!validUsername(strings.ToLower(strings.TrimSpace(c.Username))){fail(w,400,"Username must be 3–32 characters");return}
  if c.Role!=""&&c.Role!="Admin"&&c.Role!="Regular"{fail(w,400,"Invalid role");return}
  if id==actor.ID&&(c.Role=="Regular"||(c.Active!=nil&&!*c.Active)){fail(w,400,"Cannot remove your own administrator access");return}
  tx,e:=s.db.Begin(r.Context());if e!=nil{fail(w,500,"Database unavailable");return}
@@ -51,7 +52,7 @@ func (s *Server) adminUsersAPI(w http.ResponseWriter,r *http.Request){
   var count int
   if e=tx.QueryRow(r.Context(),"SELECT count(*) FROM users WHERE role='Admin' AND active=TRUE").Scan(&count);e!=nil||count<2{fail(w,400,"Cannot remove the last active administrator");return}
  }
- if _,e=tx.Exec(r.Context(),"UPDATE users SET name=CASE WHEN $2='' THEN name ELSE $2 END,role=CASE WHEN $3='' THEN role ELSE $3 END,active=COALESCE($4,active) WHERE id=$1",id,strings.TrimSpace(c.Name),c.Role,c.Active);e!=nil{fail(w,500,"Update failed");return}
+ if _,e=tx.Exec(r.Context(),"UPDATE users SET name=CASE WHEN $2='' THEN name ELSE $2 END,role=CASE WHEN $3='' THEN role ELSE $3 END,active=COALESCE($4,active),username=CASE WHEN $5='' THEN username ELSE lower($5) END WHERE id=$1",id,strings.TrimSpace(c.Name),c.Role,c.Active,strings.TrimSpace(c.Username));e!=nil{fail(w,500,"Update failed");return}
  // Invalidate sessions after role or active-status changes.
  if (c.Role!=""&&c.Role!=existingRole)||(c.Active!=nil&&*c.Active!=active){if _,e=tx.Exec(r.Context(),"DELETE FROM sessions WHERE user_id=$1",id);e!=nil{fail(w,500,"Could not revoke sessions");return}}
  if e=tx.Commit(r.Context());e!=nil{fail(w,500,"Update failed");return}
