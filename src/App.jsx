@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MeetingRoom from './MeetingRoom';
+import {liveKitSignalingOrigin} from './meeting-origin.mjs';
 import CallNotifications from './CallNotifications';
 import CallsPanel from './CallsPanel';
 import AdminConsole from './AdminConsole';
@@ -1963,8 +1964,7 @@ function App() {
   const handleGuestJoin=(room,name,data)=>{
     // Public tunnel guests must use the browser-visible hostname for WSS.
     // The backend can see only the private Caddy/Cloudflare origin Host.
-    const scheme=window.location.protocol==='https:'?'wss:':'ws:';
-    setGuestConnection({...data,serverUrl:scheme+'//'+window.location.host});
+    setGuestConnection({...data,serverUrl:liveKitSignalingOrigin(window.location)});
     setUser({id:null,name,isGuest:true});
     setMeetingRoom(room);
     window.history.pushState({},'','/'+room);
