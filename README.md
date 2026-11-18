@@ -1,3 +1,11 @@
+<p align="center"><img src="public/nexus-workspace-logo.webp" alt="Nexus Workspace by Nova" width="480" /></p>
+
+# Nexus Workspace by Nova
+
+The bundled logo is the default branding for the installer, login, app sidebar, browser icon and startup page. Administrators can still replace it using Branding settings.
+
+---
+
 ## Privacy, guest limits and Terms acceptance
 
 - **No tracking pixels or third-party analytics:** The login background is a local CSS gradient instead of an image fetched from Unsplash. The Caddy content-security policy allows only local images, and the app does not embed advertising pixels, analytics SDKs or cross-site advertising identifiers. Necessary session cookies, temporary request-rate counters, and security/audit records remain in use.
