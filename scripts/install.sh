@@ -341,6 +341,25 @@ if [[ "$verified" != true ]]; then
   docker compose logs --tail=60 https app db >&2 || true
   fail "Local HTTPS health verification failed. Proxy settings, certificate mismatch or application health may be responsible; inspect the error above."
 fi
+# A local loopback request verifies that Caddy can present a publicly trusted
+# certificate for the optional hostname. This is NOT an outside-network test.
+PUBLIC_HTTPS_VERIFIED=false
+PUBLIC_HTTPS_HOST="$NOVANEXUS_PUBLIC_DOMAIN"
+if [[ -z "$PUBLIC_HTTPS_HOST" && "$TLS_MODE" == public ]]; then PUBLIC_HTTPS_HOST="$NOVANEXUS_DOMAIN"; fi
+if [[ -n "$PUBLIC_HTTPS_HOST" ]]; then
+  for public_attempt in 1 2 3 4 5 6; do
+    if curl --noproxy "*" --resolve "$PUBLIC_HTTPS_HOST:443:127.0.0.1" --fail --silent --show-error --connect-timeout 4 --max-time 9 "https://$PUBLIC_HTTPS_HOST/api/health" 2>/dev/null | grep -q '"status":"ok"'; then
+      PUBLIC_HTTPS_VERIFIED=true
+      break
+    fi
+    sleep 3
+  done
+  if [[ "$PUBLIC_HTTPS_VERIFIED" == true ]]; then
+    log "Public hostname TLS certificate and HTTPS reverse proxy passed an on-host check."
+  else
+    log "WARNING: Public HTTPS name $PUBLIC_HTTPS_HOST is not yet verified. DNS, ACME certificates, or gateway port forwarding may need attention."
+  fi
+fi
 printf "\n==========================================\n"
 printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
 printf "==========================================\n"
