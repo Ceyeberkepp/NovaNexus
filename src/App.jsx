@@ -8,7 +8,7 @@ import WorkspaceAssistant from './WorkspaceAssistant';
 import ChatPreferences,{readChatPreferences,chatThemes,chatBackgrounds} from './ChatPreferences';
 import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
 import { 
-  Sparkles, Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
+  Sparkles, ShieldCheck, Video, Users, Calendar, LogOut, Shield, Activity, LayoutGrid, Plus, 
   Link as LinkIcon, Monitor, Lock, AlertTriangle, Mic, MicOff, Camera, 
   CameraOff, PhoneOff, RefreshCw, Eye, Disc, 
   Square, MonitorUp, X, Settings, Sliders, 
