@@ -67,6 +67,9 @@ NOVANEXUS_PUBLIC_DOMAIN=${NOVANEXUS_PUBLIC_DOMAIN:-}
 LAN_IP=$(detect_ipv4 || true)
 if [[ "$RESUME_INSTALL" == 1 ]]; then
   NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
+  if [[ -z "$NOVANEXUS_TLS_EMAIL" ]]; then
+    NOVANEXUS_TLS_EMAIL=$(sed -n 's/^TLS_EMAIL=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
   [[ -n "$NOVANEXUS_DOMAIN" ]] || fail "Existing deployment address missing."
   log "Using existing deployment address: $NOVANEXUS_DOMAIN"
   if [[ -z "$NOVANEXUS_PUBLIC_DOMAIN" ]]; then
@@ -97,6 +100,16 @@ elif valid_domain "$NOVANEXUS_DOMAIN"; then
   [[ "$NOVANEXUS_TLS_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail "Valid TLS contact email required."
 else
   fail "Enter a valid IPv4 address or public DNS name."
+fi
+
+if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" && "$TLS_MODE" == internal ]]; then
+  # A trusted public certificate needs an actual registration contact. Keep
+  # the local IP certificate issued through Caddy's private CA.
+  if [[ ! "$NOVANEXUS_TLS_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ || "$NOVANEXUS_TLS_EMAIL" == *@novanexus.invalid ]]; then
+    NOVANEXUS_TLS_EMAIL=$(ask "Email for publicly trusted HTTPS certificate")
+  fi
+  [[ "$NOVANEXUS_TLS_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ && "$NOVANEXUS_TLS_EMAIL" != *@novanexus.invalid ]] ||
+    fail "A valid TLS contact email is required for public-domain HTTPS."
 fi
 
 log "Installing any missing system dependencies"
@@ -161,7 +174,7 @@ if [[ "$RESUME_INSTALL" == 0 ]]; then
   git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$ROOT_DIR"
 else
   # Only installer-managed Caddyfile modifications may be overwritten during upgrade.
-  unmanaged=$(git -C "$ROOT_DIR" diff --name-only HEAD | grep -v "^Caddyfile$" || true)
+  unmanaged=$(git -C "$ROOT_DIR" diff --name-only HEAD | grep -Ev "^(Caddyfile|additional-sites\.caddy)$" || true)
   [[ -z "$unmanaged" ]] || fail "Local application edits detected. Refusing to overwrite: $unmanaged"
   git -C "$ROOT_DIR" fetch --quiet --depth 1 origin "$REF" || fail "Could not fetch current NovaNexus source."
   if [[ "$(git -C "$ROOT_DIR" rev-parse HEAD)" != "$(git -C "$ROOT_DIR" rev-parse FETCH_HEAD)" ]]; then
@@ -208,8 +221,8 @@ else
 fi
 # Synchronize the optional hostname on upgrades without touching credentials.
 # This supports changing a LAN deployment to dual LAN/internet access in-place.
-sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d' .env
-printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" >>.env
+sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d; /^TLS_EMAIL=/d' .env
+printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\nTLS_EMAIL=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" "$NOVANEXUS_TLS_EMAIL" >>.env
 chmod 600 .env
 LIVEKIT_KEY=$(sed -n "s/^LIVEKIT_API_KEY=//p" .env | head -n1)
 LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
@@ -251,7 +264,8 @@ $NOVANEXUS_PUBLIC_DOMAIN {
     import novanexus_routes
 }
 PUBLIC_SITE
-elif [[ "$TLS_MODE" == public && -n "$LAN_IP" && "$LAN_IP" != "$NOVANEXUS_DOMAIN" ]]; then
+fi
+if [[ "$TLS_MODE" == public && -n "$LAN_IP" && "$LAN_IP" != "$NOVANEXUS_DOMAIN" ]]; then
   cat >>additional-sites.caddy <<LAN_SITE
 $LAN_IP {
     tls internal
