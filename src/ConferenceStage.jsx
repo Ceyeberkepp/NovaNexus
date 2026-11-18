@@ -12,7 +12,7 @@ export default function ConferenceStage({roomId,onEnd}){
  const [drawer,setDrawer]=useState('');
  const [layout,setLayout]=useState('grid');
  const label=roomId||'Meeting';
- const leave=async()=>{await room.disconnect();onEnd?.();};
+ const leave=async()=>{await room.disconnect();};
  return <div className="nexus-conference-stage" data-lk-theme="default">
    <header className="nexus-video-label"><span className="nexus-live-dot"/> {label} <span className="nexus-stage-count">{participants.length} participant{participants.length===1?'':'s'}</span></header>
    <div className={'nexus-video-area '+(drawer?'nexus-with-drawer':'')}>
