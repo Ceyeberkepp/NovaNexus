@@ -14,6 +14,7 @@ const btn='rounded-xl bg-indigo-600 px-5 py-3 text-[11px] font-black uppercase t
 const tabs=[['users','Users',Users],['groups','Groups',Users],['security','Security',Shield],['meetings','Meetings',Calendar],['branding','Branding',ImageIcon],['logs','Logs',ScrollText],['ai','AI Assistant',Sparkles]];
 export default function AdminConsole({users,setUsers,initialTab='users',user}){
  const [tab,setTab]=useState(initialTab);
+ useEffect(()=>{setTab(initialTab)},[initialTab]);
  const [notice,setNotice]=useState('');
  const [loading,setLoading]=useState(false);
  const [resetTarget,setResetTarget]=useState(null);
