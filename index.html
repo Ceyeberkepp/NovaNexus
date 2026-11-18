@@ -1,2 +1,20 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>NovaNexus Workspace</title></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <title>NovaNexus Workspace</title>
+  <style>
+    body { margin:0; font-family:system-ui,sans-serif; background:#f8fafc; color:#334155; }
+    #nova-startup { min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:24px; box-sizing:border-box; text-align:center; }
+    #nova-startup strong { font-size:20px; }
+    #nova-startup p { max-width:460px; line-height:1.5; margin:0; }
+  </style>
+  <script src="/boot-health.js" defer></script>
+</head>
+<body>
+  <div id="root"><div id="nova-startup" role="status"><strong>Loading Nexus Workspace…</strong><p>Connecting to the workspace.</p></div></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
