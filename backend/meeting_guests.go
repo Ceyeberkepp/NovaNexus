@@ -42,7 +42,7 @@ func (s *Server) guestMeetingRateLimited(r *http.Request,room string) bool {
 }
 
 // guestMeetingTokenAPI mints a short-lived, meeting-only LiveKit token.
-// Guests do not exist in the workspace users or sessions tables.
+// Guests do not exist in the workspace users or sessions tables. A token\n// may create ONLY the pre-reserved authorized meeting room if the host is not\n// yet connected. The token never grants access to other rooms.
 func (s *Server) guestMeetingTokenAPI(w http.ResponseWriter,r *http.Request) {
  if r.Method!="POST"{fail(w,405,"Method not allowed");return}
  var req struct{Room string;Name string;Password string}
@@ -70,7 +70,7 @@ func (s *Server) guestMeetingTokenAPI(w http.ResponseWriter,r *http.Request) {
  payload,err:=jwtPart(map[string]any{
   "iss":key,"sub":"guest_"+randomHex(16),"name":req.Name,
   "iat":now.Unix(),"nbf":now.Add(-5*time.Second).Unix(),"exp":now.Add(10*time.Minute).Unix(),
-  "video":map[string]any{"room":req.Room,"roomJoin":true,"roomCreate":false,"canPublish":true,"canSubscribe":true},
+  "video":map[string]any{"room":req.Room,"roomJoin":true,"roomCreate":true,"canPublish":true,"canSubscribe":true},
  })
  if err!=nil{fail(w,500,"Cannot create guest token");return}
  signed:=header+"."+payload
