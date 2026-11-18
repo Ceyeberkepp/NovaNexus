@@ -218,7 +218,7 @@ func main() {
  var count int
  if e:=db.QueryRow(ctx,"SELECT count(*) FROM users WHERE role='Admin'").Scan(&count);e!=nil{log.Fatal(e)}
  if count==0 {
-  _,err=db.Exec(ctx,"INSERT INTO users(name,email,password_hash,role,must_change_password) VALUES('Administrator','admin@local.invalid',$1,'Admin',TRUE)",passwordHash(adminPassword))
+  _,err=db.Exec(ctx,"INSERT INTO users(name,email,username,password_hash,role,must_change_password) VALUES('Administrator','admin@local.invalid','admin',$1,'Admin',TRUE)",passwordHash(adminPassword))
   if err!=nil{log.Fatal(err)}
  } else {
   // Upgrade a pending legacy admin/admin + setup-code installation without exposing a default password.
