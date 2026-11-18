@@ -1961,7 +1961,10 @@ function App() {
   };
 
   const handleGuestJoin=(room,name,data)=>{
-    setGuestConnection(data);
+    // Public tunnel guests must use the browser-visible hostname for WSS.
+    // The backend can see only the private Caddy/Cloudflare origin Host.
+    const scheme=window.location.protocol==='https:'?'wss:':'ws:';
+    setGuestConnection({...data,serverUrl:scheme+'//'+window.location.host});
     setUser({id:null,name,isGuest:true});
     setMeetingRoom(room);
     window.history.pushState({},'','/'+room);
