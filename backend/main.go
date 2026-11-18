@@ -197,6 +197,7 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/meetings/password":s.meetingPasswordAPI(w,r)
  case "/api/messages/recent":s.recentMessagesAPI(w,r)
  case "/api/messages":s.messagesAPI(w,r)
+ case "/api/messages/attachment":s.messageAttachmentAPI(w,r)
  case "/api/calendar":s.calendarAPI(w,r)
  case "/api/auth/mfa":s.mfaAPI(w,r)
  case "/api/auth/login":if r.Method=="POST"{s.login(w,r)}else{fail(w,405,"Method not allowed")}
@@ -232,6 +233,7 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
   "CREATE TABLE IF NOT EXISTS workspace_groups (id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL UNIQUE,description TEXT NOT NULL DEFAULT '')",
   "CREATE TABLE IF NOT EXISTS group_members (group_id BIGINT NOT NULL REFERENCES workspace_groups(id) ON DELETE CASCADE,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(group_id,user_id))",
   "CREATE TABLE IF NOT EXISTS direct_messages (id BIGSERIAL PRIMARY KEY,sender_id BIGINT NOT NULL REFERENCES users(id),recipient_id BIGINT NOT NULL REFERENCES users(id),body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
+  "CREATE TABLE IF NOT EXISTS message_attachments (message_id BIGINT PRIMARY KEY REFERENCES direct_messages(id) ON DELETE CASCADE,filename TEXT NOT NULL,content_type TEXT NOT NULL,content BYTEA NOT NULL,size_bytes INT NOT NULL)",
   "CREATE INDEX IF NOT EXISTS direct_messages_pair_idx ON direct_messages(sender_id,recipient_id,id DESC)",
   "CREATE TABLE IF NOT EXISTS meeting_rooms (room VARCHAR(8) PRIMARY KEY CHECK(room ~ '^[0-9]{8}$'),owner_id BIGINT NOT NULL REFERENCES users(id),kind TEXT NOT NULL DEFAULT 'normal' CHECK(kind IN ('normal','call')),closed BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   "ALTER TABLE meeting_rooms ADD COLUMN IF NOT EXISTS guest_password_hash TEXT NOT NULL DEFAULT ''",
