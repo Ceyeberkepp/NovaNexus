@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 540" role="img" aria-labelledby="title desc">
+<title id="title">Nexus Workspace by Nova</title>
+<desc id="desc">Purple video-chat emblem with a flowing white N, alongside Nexus Workspace by Nova lettering.</desc>
+<defs>
+ <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c12cff"/><stop offset=".32" stop-color="#8200dc"/><stop offset=".66" stop-color="#400088"/><stop offset="1" stop-color="#8f00e2"/></linearGradient>
+ <linearGradient id="panelEdge" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="#ed8cff"/><stop offset=".4" stop-color="#a429ed"/><stop offset=".85" stop-color="#39006c"/><stop offset="1" stop-color="#8b00c8"/></linearGradient>
+ <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".48" stop-color="#fff"/><stop offset=".75" stop-color="#e8c6ff"/><stop offset="1" stop-color="#a647e4"/></linearGradient>
+ <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a719f5"/><stop offset=".55" stop-color="#5800b0"/><stop offset="1" stop-color="#310060"/></linearGradient>
+ <linearGradient id="nova" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#a50bfa"/><stop offset="1" stop-color="#7400eb"/></linearGradient>
+ <filter id="shadow" x="-30%" y="-30%" width="170%" height="170%"><feDropShadow dx="0" dy="10" stdDeviation="13" flood-color="#35006e" flood-opacity=".26"/></filter>
+</defs>
+<g filter="url(#shadow)">
+ <path d="M90 66H365C419 66 452 100 452 154V372C452 425 418 461 365 461H180L92 520L110 454C63 443 43 408 43 362V154C43 100 70 66 90 66Z" fill="url(#panel)" stroke="url(#panelEdge)" stroke-width="9" stroke-linejoin="round"/>
+ <path d="M453 196L511 145Q538 123 540 171V344Q540 383 510 359L453 322Z" fill="url(#lens)" stroke="#6c00bc" stroke-width="5"/>
+ <path d="M81 82H363Q430 82 432 157" fill="none" stroke="#f7b5ff" stroke-opacity=".6" stroke-width="5" stroke-linecap="round"/>
+ <path d="M94 345C111 226 151 176 207 170C260 165 295 233 330 279C348 301 369 315 380 277L400 200C410 155 447 173 431 255L403 369C389 425 342 428 302 389L202 285C178 261 152 255 132 309L112 371C99 407 68 389 94 345Z" fill="url(#ribbon)"/>
+</g>
+<rect x="564" y="69" width="7" height="408" rx="3.5" fill="#7900c8"/>
+<g font-family="Inter, Avenir Next, Segoe UI, Arial, sans-serif" font-weight="800" letter-spacing="-6" fill="#210043">
+ <text x="614" y="215" font-size="174">Nexus</text>
+ <text x="615" y="371" font-size="148">Workspace</text>
+</g>
+<g font-family="Inter, Avenir Next, Segoe UI, Arial, sans-serif" font-weight="800" letter-spacing="-3">
+ <text x="621" y="468" fill="#29004f" font-size="85">by</text>
+ <text x="760" y="468" fill="url(#nova)" font-size="116">Nova</text>
+</g>
+</svg>
