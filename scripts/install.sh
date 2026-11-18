@@ -174,7 +174,18 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required."
 # If another service occupies port 80, use an unoccupied host HTTP port.
 # This does not change the LAN HTTPS URL (port 443).
 host_port_busy(){
-  ss -H -ltn | awk '{print $4}' | grep -Eq "[:.]1$"
+  local port="${1:-}"
+  [[ "$port" =~ ^[0-9]{1,5}$ ]] || return 2
+  # Match the exact listener port (IPv4 or IPv6). A substring match can
+  # confuse 80 with 8080, or 443 with 1443.
+  ss -H -ltn | awk -v port="$port" '
+    {
+      address=$4
+      sub(/^.*:/, "", address)
+      if (address == port) found=1
+    }
+    END { exit !found }
+  '
 }
 valid_port(){
   [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1024 && 10#$1 <= 65535 ))
