@@ -3,6 +3,7 @@ import MeetingRoom from './MeetingRoom';
 import CallNotifications from './CallNotifications';
 import CallsPanel from './CallsPanel';
 import AdminConsole from './AdminConsole';
+import AccountSecurity from './AccountSecurity';
 import WorkspaceAssistant from './WorkspaceAssistant';
 import ChatPreferences,{readChatPreferences,chatThemes,chatBackgrounds} from './ChatPreferences';
 import { signIn, getSession, rotateInitialPassword, fetchUsers, provisionUser, signOut, getMessages, postMessage, getCalendarEvents, postCalendarEvent } from './auth-client';
@@ -75,6 +76,8 @@ const NavItem = ({ icon, label, active, onClick, collapsed }) => (
 const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
   const [email, setEmail] = useState(''); 
   const [password, setPassword] = useState('');
+  const [mfaPending,setMfaPending]=useState(false);
+  const [mfaCode,setMfaCode]=useState('');
   const [branding,setBranding] = useState({workspace_name:'Nexus Workspace'});
   useEffect(()=>{let live=true;fetch('/api/branding').then(r=>r.json()).then(d=>{if(live&&d.branding){setBranding(d.branding);document.title=d.branding.workspace_name||'NovaNexus';if(d.branding.favicon){let link=document.querySelector('link[rel="icon"]');if(!link){link=document.createElement('link');link.rel='icon';document.head.appendChild(link);}link.href=d.branding.favicon;}}}).catch(()=>{});return()=>{live=false;};},[]);
   const [activeTab, setActiveTab] = useState('login'); 
@@ -96,17 +99,18 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
     setAuthError('');
     if (activeTab === 'join') {
       if(!/^[0-9]{8}$/.test(meetingId)){setAuthError('Enter an 8-digit meeting number.');return;}
-      const target = new URL(window.location.href);
       window.location.assign('/'+meetingId);
       return;
     }
     setLoading(true);
     try {
-      const result = await signIn(email, password);
+      const result = await signIn(email, password,mfaCode);
       setUser(result.user);
+      setMfaCode('');setMfaPending(false);setPassword('');
       setView(result.user.must_change_password ? 'change-password' : (prefilledRoom&&/^[0-9]{8}$/.test(prefilledRoom)?'meeting':'dashboard'));
     } catch (error) {
-      setAuthError(error.message || 'Sign-in failed');
+      if(error.message==='MFA_REQUIRED'){setMfaPending(true);setAuthError('Authenticator code required to finish signing in.');}
+      else {setAuthError(error.message || 'Sign-in failed');if(error.message==='Invalid credentials'){setMfaPending(false);setMfaCode('');}}
     } finally {
       setLoading(false);
     }
@@ -161,7 +165,8 @@ const AuthScreen = ({ setUser, setView, prefilledRoom }) => {
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
                         <input type="password" placeholder="••••••••" value={password} required className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-200 transition-all placeholder:text-slate-300" onChange={e => setPassword(e.target.value)} />
                     </div>
-<button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Sign In'}</button>
+{mfaPending&&<div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 space-y-2"><label className="block text-[10px] font-black uppercase tracking-widest text-indigo-800">Authenticator or recovery code</label><input aria-label="Authenticator code" type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={30} required value={mfaCode} onChange={e=>setMfaCode(e.target.value.trim())} placeholder="6-digit code" className="w-full rounded-lg border border-indigo-200 p-3 text-sm outline-none focus:border-indigo-600"/><p className="text-xs text-indigo-700">Use the current six-digit code, or one unused recovery code.</p></div>}
+<button type="submit" disabled={loading||(mfaPending&&!mfaCode)} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all text-sm flex items-center justify-center mt-2">{loading ? <Loader2 className="animate-spin" size={20}/> : 'Sign In'}</button>
                 </div>
             )}
             </form>
@@ -2012,6 +2017,7 @@ function App() {
                 <NavItem icon={<LayoutGrid />} label="Overview" active={currentTab === 'dashboard'} onClick={() => setCurrentTab('dashboard')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<MessageCircle />} label="Chat" active={currentTab === 'chats'} onClick={() => setCurrentTab('chats')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Phone />} label="Calls" active={currentTab === 'calls'} onClick={() => setCurrentTab('calls')} collapsed={sidebarCollapsed} />
+                <NavItem icon={<ShieldCheck />} label="Account Security" active={currentTab === 'security'} onClick={() => setCurrentTab('security')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Sparkles />} label="AI Assistant" active={currentTab === 'ai'} onClick={() => setCurrentTab('ai')} collapsed={sidebarCollapsed} />
                 {user?.role === 'Admin' && <NavItem icon={<Shield />} label="Admin" active={currentTab === 'admin'} onClick={() => setCurrentTab('admin')} collapsed={sidebarCollapsed} />}
@@ -2146,6 +2152,7 @@ function App() {
                 )}
                 {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} currentUser={user} />}
                 {currentTab === 'calls' && <CallsPanel user={user} users={users} />}
+                {currentTab === 'security' && <AccountSecurity user={user} />}
                 {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
                 {currentTab === 'ai' && <WorkspaceAssistant />}
                 {currentTab === 'admin' && (user?.role === 'Admin' ? <AdminConsole users={users} setUsers={setUsers} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
