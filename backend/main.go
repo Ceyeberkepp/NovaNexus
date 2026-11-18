@@ -138,11 +138,36 @@ func (s *Server) users(w http.ResponseWriter,r *http.Request) {
  s.audit(r,u.ID,"user.created",c.Username)
  respond(w,201,map[string]any{"user":(User{ID:id,Name:strings.TrimSpace(c.Name),Email:strings.ToLower(strings.TrimSpace(c.Email)),Username:c.Username,Role:"Regular"}).data()})
 }
+// acceptedBrowserOrigin handles Cloudflare Tunnel forwarding the appliance IP
+// as HTTP Host while the browser's Origin is its public HTTPS hostname.
+// Browsers set Sec-Fetch-Site automatically; untrusted cross-site browser
+// requests are additionally rejected in the API's fetch-metadata check.
+func acceptedBrowserOrigin(r *http.Request, secure bool) bool {
+ origin:=r.Header.Get("Origin")
+ if origin=="" {return true}
+ u,e:=url.Parse(origin)
+ if e!=nil||u.Host==""||u.User!=nil||u.Path!=""||u.RawQuery!=""||u.Fragment!="" {return false}
+ if u.Scheme!="https" && (secure||u.Scheme!="http") {return false}
+ if strings.EqualFold(u.Host,r.Host) {return true}
+ if secure&&u.Scheme=="https" {
+  for _,name:=range []string{os.Getenv("NOVANEXUS_TUNNEL_DOMAIN"),os.Getenv("NOVANEXUS_PUBLIC_DOMAIN")} {
+   name=strings.TrimSpace(strings.TrimPrefix(name,"https://"))
+   name=strings.TrimSuffix(name,"/")
+   if name!=""&&strings.EqualFold(u.Host,name){return true}
+  }
+  // Cloudflare's HTTP Host Header override changes the upstream Host only.
+  // The browser's same-origin fetch metadata still reliably identifies a
+  // same-origin request; never permit missing, "none" or "same-site" here.
+  if r.Header.Get("Sec-Fetch-Site")=="same-origin" {return true}
+ }
+ return false
+}
+
 func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  w.Header().Set("X-Content-Type-Options","nosniff")
  if r.Method!="GET"&&r.Method!="HEAD" {
   if ct:=strings.Split(r.Header.Get("Content-Type"),";")[0];ct!="application/json"{fail(w,415,"JSON required");return}
-  if origin:=r.Header.Get("Origin");origin!="" {u,e:=url.Parse(origin);if e!=nil||u.Host!=r.Host||u.Scheme!="https"&&s.secure{fail(w,403,"Origin rejected");return}}
+  if !acceptedBrowserOrigin(r,s.secure){fail(w,403,"Origin rejected");return}
   if site:=r.Header.Get("Sec-Fetch-Site");site!=""&&site!="same-origin"&&site!="none"{fail(w,403,"Cross-site request rejected");return}
  }
  switch r.URL.Path {
