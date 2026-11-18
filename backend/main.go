@@ -27,7 +27,7 @@ import (
 
 const cookieName = "novanexus_session"
 
-type Server struct { db *pgxpool.Pool; secure bool; limitMu sync.Mutex; attempts map[string][]time.Time }
+type Server struct { db *pgxpool.Pool; secure bool; limitMu sync.Mutex; attempts map[string][]time.Time; visitMu sync.Mutex; visitors map[string]visitorWindow }
 type User struct { ID int64; Name, Email, Username, Role string; JobTitle, Birthday, Avatar, TermsVersion string; MustChange bool; MFAEnabled bool }
 type credentials struct { Email, Password, Code string }
 
@@ -292,6 +292,7 @@ func main() {
   w.Header().Set("Cache-Control","no-store");http.ServeFile(w,r,filepath.Join(dist,"index.html"))
  })
  handler:=http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if s.guestLimited(w,r){return}
   w.Header().Set("X-Content-Type-Options","nosniff")
   w.Header().Set("X-Frame-Options","DENY")
   w.Header().Set("Referrer-Policy","strict-origin-when-cross-origin")
