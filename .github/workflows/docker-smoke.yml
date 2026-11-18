@@ -94,6 +94,18 @@ jobs:
           done
           docker compose logs --tail=80 https
           exit 1
+      - name: Verify embedded authenticated TURN UDP starts
+        run: |
+          set -euo pipefail
+          cat >> livekit.yaml <<'EOF'
+          turn:
+            enabled: true
+            udp_port: 3478
+          EOF
+          docker compose up -d --force-recreate livekit
+          sleep 4
+          docker compose ps --status running livekit | grep -q livekit
+          docker compose logs --tail=60 livekit | grep -v 'error'
       - name: Container logs on failure
         if: failure()
         run: docker compose logs --tail=100 app db
