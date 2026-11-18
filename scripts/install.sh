@@ -66,6 +66,9 @@ NOVANEXUS_TLS_EMAIL=${NOVANEXUS_TLS_EMAIL:-}
 NOVANEXUS_PUBLIC_DOMAIN=${NOVANEXUS_PUBLIC_DOMAIN:-}
 NOVANEXUS_TUNNEL_DOMAIN=${NOVANEXUS_TUNNEL_DOMAIN:-}
 NOVANEXUS_HTTP_PORT=${NOVANEXUS_HTTP_PORT:-}
+# Explicitly select WAN WebRTC media when HTTPS is published through a tunnel.
+# The tunnel only handles signaling, not the UDP media path.
+NOVANEXUS_MEDIA_MODE=${NOVANEXUS_MEDIA_MODE:-}
 LAN_IP=$(detect_ipv4 || true)
 if [[ "$RESUME_INSTALL" == 1 ]]; then
   NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
@@ -82,6 +85,9 @@ if [[ "$RESUME_INSTALL" == 1 ]]; then
   fi
   if [[ -z "$NOVANEXUS_HTTP_PORT" ]]; then
     NOVANEXUS_HTTP_PORT=$(sed -n 's/^NOVANEXUS_HTTP_PORT=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
+  if [[ -z "$NOVANEXUS_MEDIA_MODE" ]]; then
+    NOVANEXUS_MEDIA_MODE=$(sed -n 's/^NOVANEXUS_MEDIA_MODE=//p' "$ROOT_DIR/.env" | head -n1)
   fi
 elif [[ -z "$NOVANEXUS_DOMAIN" ]]; then
   NOVANEXUS_DOMAIN=$(detect_ipv4 || true)
@@ -266,12 +272,24 @@ LIVEKIT_KEY=$(sed -n "s/^LIVEKIT_API_KEY=//p" .env | head -n1)
 LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
 [[ "$LIVEKIT_KEY" =~ ^[a-zA-Z0-9_-]{3,64}$ && ${#LIVEKIT_SECRET} -ge 32 ]] || fail "Invalid video server credentials."
 [[ "$NOVANEXUS_DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] || fail "Invalid video host address."
-# WebRTC media uses dedicated UDP/TCP ports, NOT the HTTPS reverse proxy.
-# When a publicly reachable hostname is configured, LiveKit asks STUN for its
-# public candidate. This still requires router/NAT forwarding for 7881 TCP
-# and 7882 UDP (or a properly configured TURN service).
+# WebRTC media is NOT carried by Cloudflare's HTTP tunnel. An IP-only
+# installation can still be accessed from the internet via Cloudflare, even
+# when the tunnel was configured in the dashboard (not this installer).
+# Do not silently switch a deployed LAN setup. Allow an explicit override.
+if [[ -z "$NOVANEXUS_MEDIA_MODE" ]]; then
+  if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" || -n "$NOVANEXUS_TUNNEL_DOMAIN" || "$TLS_MODE" == public ]]; then
+    NOVANEXUS_MEDIA_MODE=public
+  else
+    NOVANEXUS_MEDIA_MODE=lan
+  fi
+fi
+[[ "$NOVANEXUS_MEDIA_MODE" == lan || "$NOVANEXUS_MEDIA_MODE" == public ]] || fail "NOVANEXUS_MEDIA_MODE must be lan or public."
 PUBLIC_MEDIA=0
-if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" || -n "$NOVANEXUS_TUNNEL_DOMAIN" || "$TLS_MODE" == public ]]; then PUBLIC_MEDIA=1; fi
+if [[ "$NOVANEXUS_MEDIA_MODE" == public ]]; then PUBLIC_MEDIA=1; fi
+# Persist mode for future upgrades. This is not a new website address/port.
+sed -i '/^NOVANEXUS_MEDIA_MODE=/d' .env
+printf 'NOVANEXUS_MEDIA_MODE=%s\n' "$NOVANEXUS_MEDIA_MODE" >> .env
+log "LiveKit media mode: $NOVANEXUS_MEDIA_MODE"
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   MEDIA_RTC_CONFIG='  use_external_ip: true
   advertise_internal_ip: true'
@@ -424,7 +442,11 @@ if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   log "Internet media requires reachable TCP 7881, UDP 7882 and TURN UDP 3478; HTTPS on TCP 443 alone does NOT carry WebRTC media."
   log "Forward TCP 80/443, TCP 7881, UDP 7882 and UDP 3478 from the public gateway to this host, unless an existing secure ingress/relay handles those services."
   log "Internet access is NOT confirmed by this local health check. Verify from a device outside the LAN."
+else
+  log "WARNING: WebRTC is in LAN-only mode. External participants on 5G cannot reach a private ICE candidate even when the Cloudflare GUI loads."
+  log "If using Cloudflare for external calls, rerun with NOVANEXUS_MEDIA_MODE=public after configuring WAN media forwarding or an external TURN relay."
 fi
+log "Run media checks: bash $ROOT_DIR/scripts/check-media.sh"
 
 if [[ "$TLS_MODE" == internal ]]; then
   printf "Local TLS root certificate: %s\n" "$CA_FILE"

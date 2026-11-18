@@ -62,6 +62,24 @@ The installer now supports **both local-IP HTTPS and an optional public HTTPS ho
 
 The app prefers the configured external hostname when generating shareable meeting URLs, such as `https://nexu.cyverax.com/12345678`. The existing LAN IP address remains an option for internal browsers and administrators. If no public hostname is configured, links use the host you are browsing.
 
+### Troubleshooting calls that ring but have no audio/video on 5G
+
+When the website and incoming call are visible but a remote participant sees `could not establish pc connection`, the WSS control channel has reached LiveKit but the **ICE/WebRTC media candidate is unreachable**. Cloudflare Tunnel's HTTP route for `https://nexus.cyverax.com` does not carry LiveKit's UDP media.
+
+**Proxmox host → Proxmox LXC → LightNAS → nested Linux container → Docker:** verify media ingress through **every** layer (or use an explicitly configured external TURN relay). The standard embedded LiveKit listeners are **TCP 7881**, **UDP 7882**, and fallback **UDP 3478**. The existing HTTPS GUI stays on **`192.168.0.52:443`**; these media ports are not extra website addresses and must be available to outside callers, not just locally. Forward the public gateway's media ports through Proxmox/LightNAS to the NovaNexus Linux container, with the correct firewalls and network mappings. Do not assume the Proxmox host's working `curl https://192.168.0.52/api/health` proves these media ports work. An HTTP-only tunnel cannot solve this by a Host-header setting.
+
+If your Cloudflare Tunnel was created directly in the Cloudflare dashboard, the NovaNexus installer might not know that external calling is required, and could still render `rtc.use_external_ip: false` and a private `node_ip`. For public calls, first configure a reachable WebRTC media path, then inside the **NovaNexus Linux container** run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ceyeberkepp/NovaNexus/main/scripts/install.sh -o /root/novanexus-install.sh
+NOVANEXUS_MEDIA_MODE=public bash /root/novanexus-install.sh
+bash /opt/novanexus/scripts/check-media.sh
+```
+
+The installer saves `NOVANEXUS_MEDIA_MODE=public` for future upgrades and renders LiveKit public ICE candidates using STUN. Use `NOVANEXUS_MEDIA_MODE=lan` for LAN-only deployments; **do not switch to public mode without public media forwarding or a relay**, because changing candidates alone cannot make remote audio/video work. The diagnostic intentionally avoids printing API keys and cannot confirm WAN reachability. Test from a device on cellular data after setting up port forwarding/TURN and check the LiveKit container logs and browser WebRTC diagnostics if still failing.
+
+The iPhone URL in the supplied screenshot is `nexus.ceyeberkeep.com`, while the earlier working route was `nexus.cyverax.com`; verify that **both hostnames**, if intentionally used, point to the intended NovaNexus site and forward WebSocket upgrades. Neither public hostname changes the separate ICE media forwarding requirement.
+
 **Required router/firewall ingress for direct self-hosting:** TCP **80** (ACME/redirect), TCP **443** (GUI, auth API and secure WebSockets), UDP **7882** and TCP **7881** (WebRTC media), and UDP **3478** (LiveKit's authenticated TURN/UDP fallback). Media ports bypass the HTTP proxy. Do **not** expose PostgreSQL, Ollama or the internal Go/LiveKit API ports (5432, 11434, 3000 or 7880).
 
 The installer can install and configure the services and validate local HTTPS, but **cannot create a DNS record, bypass carrier-grade NAT, automatically reconfigure an upstream router, or verify external clients from inside the network**. Confirm the public hostname, port forwarding, and media from a truly external device. An HTTPS-only tunnel is sufficient for the web UI and signaling, **not** WebRTC UDP/TCP media unless an externally reachable media relay or TURN service is separately configured. TURN/TLS on a trusted public media hostname provides wider coverage for restrictive corporate networks but is not bundled/configured by this installer.

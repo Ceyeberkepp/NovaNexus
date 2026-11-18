@@ -74,7 +74,14 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       audio={audioOnly?true:(prefs.callMicEnabled===false?false:{echoCancellation:prefs.callEchoCancellation!==false,noiseSuppression:prefs.callNoiseSuppression!==false,...(prefs.callAudioDevice?{deviceId:prefs.callAudioDevice}:{})})}
       video={audioOnly?false:prefs.callCamEnabled===false?false:{resolution:({ '360p':{width:640,height:360}, '720p':{width:1280,height:720}, '1080p':{width:1920,height:1080}}[prefs.callQuality]||{width:1280,height:720}),...(prefs.callVideoDevice?{deviceId:prefs.callVideoDevice}:{})}}
       onDisconnected={()=>{if(!switchingRef.current){setConnection(null);setError('Call disconnected. Check your network connection or try joining again.');}}}
-      onError={(e)=>{setConnection(null);setError(e?.message||'Unable to connect to the meeting server. Check HTTPS, WebSocket and media connectivity.')}}
+      onError={(e)=>{
+        setConnection(null);
+        const raw=String(e?.message||'Connection failed');
+        const iceFailed=/pc connection|peer connection|ice|candidate|connectivity/i.test(raw);
+        setError(iceFailed
+          ? 'Media connection failed (WebRTC/ICE). The meeting website loaded, but this network cannot reach the LiveKit media server. External devices need reachable TCP 7881, UDP 7882, UDP 3478 or a working TURN relay. Details: '+raw
+          : 'Unable to connect to the meeting server: '+raw);
+      }}
       style={{height:'100%'}}>
       <ConferenceStage roomId={roomId} onEnd={leave}/>
       <MeetingExtras shareUrl={shareUrl} roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>
@@ -87,10 +94,10 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       <h1 className="text-2xl font-bold">NovaNexus Video Meeting</h1>
       <div className="text-slate-300">Room: <strong>{roomId}</strong></div>
       <div className="text-slate-300">Signed in as {user?.name||'Member'}</div><button className="rounded-lg border border-slate-500 px-4 py-2 text-sm" onClick={()=>setShowSettings(true)}>Video &amp; Audio Settings</button>
-      <label className="grid gap-2 text-sm">Share meeting link<input aria-label="Meeting invitation link" readOnly className="w-full rounded-lg text-slate-900 p-3" value={shareUrl}/></label><button type="button" onClick={copyInvite} className="rounded-lg border border-slate-500 px-4 py-2 text-sm">Copy meeting link</button>{copyFeedback&&<p role="status" className="text-sm text-slate-300">{copyFeedback}</p>}
+      <label className="grid gap-2 text-sm">Share meeting link<input aria-label="Meeting invitation link" readOnly className="w-full min-w-0 rounded-lg border border-slate-600 bg-white p-3 text-sm font-semibold text-slate-900" value={shareUrl}/></label><button type="button" onClick={copyInvite} className="rounded-lg border border-slate-500 px-4 py-2 text-sm">Copy meeting link</button>{copyFeedback&&<p role="status" className="text-sm text-slate-300">{copyFeedback}</p>}
       <label className="grid gap-2 font-medium" htmlFor="meeting-limit">
         Maximum participants (1–{workspaceLimit})
-        <input id="meeting-limit" className="w-full rounded-lg text-slate-900 p-3"
+        <input id="meeting-limit" className="w-full rounded-lg border border-slate-600 bg-white p-3 font-semibold text-slate-900"
           type="number" min={1} max={workspaceLimit} step={1} value={maxParticipants}
           onChange={e=>setMaxParticipants(Number(e.target.value))} />
       </label>
@@ -98,7 +105,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
         Capacity is configurable up to 1000; actual simultaneous audio/video capacity
         depends on server resources, bandwidth and browser conditions.
       </p>
-      {error&&<div role="alert" className="rounded-lg bg-red-900 p-3">{error}</div>}
+      {error&&<div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-900/90 p-4 text-sm leading-6 text-white">{error}</div>}
       {showSettings&&<VideoSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
       <div className="flex gap-3">
         <button onClick={()=>join()} disabled={loading} className="flex-1 rounded-lg bg-indigo-600 p-3 font-semibold disabled:opacity-60">{loading?'Connecting...':'Join Meeting'}</button>
