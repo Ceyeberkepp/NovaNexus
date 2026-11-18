@@ -28,9 +28,22 @@ import (
 const cookieName = "novanexus_session"
 
 type Server struct { db *pgxpool.Pool; secure bool; limitMu sync.Mutex; attempts map[string][]time.Time }
-type User struct { ID int64; Name, Email, Role string; MustChange bool }
-type credentials struct { Email, Password string }
+type User struct { ID int64; Name, Email, Username, Role string; MustChange bool; MFAEnabled bool }
+type credentials struct { Email, Password, Code string }
 
+func validUsername(name string) bool {
+ if len(name)<3||len(name)>32{return false}
+ for _,c:=range name {if !(c>='a'&&c<='z'||c>='0'&&c<='9'||c=='_'||c=='-'){return false}}
+ return true
+}
+func generatedUsername(email string) string {
+ local:=strings.SplitN(strings.ToLower(strings.TrimSpace(email)),"@",2)[0]
+ filtered:=strings.Builder{}
+ for _,c:=range local{if c>='a'&&c<='z'||c>='0'&&c<='9'||c=='_'||c=='-' {filtered.WriteRune(c)}}
+ candidate:=filtered.String()
+ if len(candidate)<3||len(candidate)>25||candidate=="admin"{return "member_"+randomHex(5)}
+ return candidate+"_"+randomHex(3)
+}
 func randomHex(n int) string { b:=make([]byte,n); if _,err:=rand.Read(b);err!=nil {panic(err)};return hex.EncodeToString(b) }
 func tokenHash(s string) string { sum:=sha256.Sum256([]byte(s)); return hex.EncodeToString(sum[:]) }
 func passwordHash(p string) string {
@@ -47,12 +60,12 @@ func verifyPassword(p,stored string) bool {
 func respond(w http.ResponseWriter,status int,body any) {w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store");w.WriteHeader(status);_ =json.NewEncoder(w).Encode(body)}
 func fail(w http.ResponseWriter,code int,message string) {respond(w,code,map[string]any{"error":message})}
 func asJSON(r *http.Request,out any) error {r.Body=http.MaxBytesReader(nil,r.Body,16*1024);defer r.Body.Close();return json.NewDecoder(r.Body).Decode(out)}
-func (u User) data() map[string]any {return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email,"role":u.Role,"must_change_password":u.MustChange}}
+func (u User) data() map[string]any {return map[string]any{"id":u.ID,"name":u.Name,"email":u.Email,"username":u.Username,"role":u.Role,"mfa_enabled":u.MFAEnabled,"must_change_password":u.MustChange}}
 func cookie(token string,secure bool,maxAge int) *http.Cookie {return &http.Cookie{Name:cookieName,Value:token,Path:"/",HttpOnly:true,Secure:secure,SameSite:http.SameSiteStrictMode,MaxAge:maxAge}}
 func (s *Server) who(r *http.Request) (User,error) {
  c,err:=r.Cookie(cookieName);if err!=nil||len(c.Value)!=64{return User{},errors.New("not authenticated")}
  var u User
- err=s.db.QueryRow(r.Context(),`SELECT u.id,u.name,u.email,u.role,u.must_change_password FROM sessions ss JOIN users u ON ss.user_id=u.id WHERE ss.token_hash=$1 AND ss.expires_at>NOW() AND u.active=TRUE`,tokenHash(c.Value)).Scan(&u.ID,&u.Name,&u.Email,&u.Role,&u.MustChange)
+ err=s.db.QueryRow(r.Context(),`SELECT u.id,u.name,u.email,u.username,u.role,u.must_change_password,u.mfa_enabled FROM sessions ss JOIN users u ON ss.user_id=u.id WHERE ss.token_hash=$1 AND ss.expires_at>NOW() AND u.active=TRUE`,tokenHash(c.Value)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&u.MFAEnabled)
  return u,err
 }
 func (s *Server) limited(r *http.Request, account string) bool {
@@ -69,7 +82,7 @@ func (s *Server) login(w http.ResponseWriter,r *http.Request) {
  var c credentials;if asJSON(r,&c)!=nil||len(c.Email)>254||len(c.Password)>1024 {fail(w,400,"Invalid credentials");return}
  if s.limited(r,c.Email){fail(w,429,"Too many attempts");return}
  var u User;var stored string
- err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,role,must_change_password,password_hash FROM users WHERE (lower(email)=lower($1) OR (lower($1)='admin' AND lower(email)='admin@local.invalid')) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Role,&u.MustChange,&stored)
+ err:=s.db.QueryRow(r.Context(),`SELECT id,name,email,username,role,must_change_password,password_hash,mfa_enabled FROM users WHERE (lower(email)=lower($1) OR lower(username)=lower($1)) AND active=TRUE`,strings.TrimSpace(c.Email)).Scan(&u.ID,&u.Name,&u.Email,&u.Username,&u.Role,&u.MustChange,&stored,&u.MFAEnabled)
  if err!=nil||!verifyPassword(c.Password,stored){fail(w,401,"Invalid credentials");return}
  token:=randomHex(32)
  var durationText string
@@ -106,19 +119,22 @@ func (s *Server) logout(w http.ResponseWriter,r *http.Request) {
 func (s *Server) users(w http.ResponseWriter,r *http.Request) {
  u,e:=s.who(r);if e!=nil{fail(w,401,"Sign in required");return};if u.MustChange{fail(w,403,"Password change required");return}
  if r.Method=="GET" {
- rows,e:=s.db.Query(r.Context(),"SELECT id,name,email,role,must_change_password FROM users WHERE active=TRUE ORDER BY name LIMIT 500")
+ rows,e:=s.db.Query(r.Context(),"SELECT id,name,email,username,role,must_change_password,mfa_enabled FROM users WHERE active=TRUE ORDER BY name LIMIT 500")
  if e!=nil{fail(w,500,"Directory unavailable");return};defer rows.Close()
  list:=[]any{}
- for rows.Next(){var x User;if rows.Scan(&x.ID,&x.Name,&x.Email,&x.Role,&x.MustChange)==nil{list=append(list,x.data())}}
+ for rows.Next(){var x User;if rows.Scan(&x.ID,&x.Name,&x.Email,&x.Username,&x.Role,&x.MustChange,&x.MFAEnabled)==nil{list=append(list,x.data())}}
  respond(w,200,map[string]any{"users":list});return
  }
  if u.Role!="Admin"{fail(w,403,"Administrator required");return}
- var c struct {Name,Email,Password string}
+ var c struct {Name,Email,Username,Password string}
  if asJSON(r,&c)!=nil||len(strings.TrimSpace(c.Name))<2||len(c.Name)>120||len(c.Email)>254||!strings.Contains(c.Email,"@")||len(c.Password)<8||len(c.Password)>1024 {fail(w,400,"Valid name, email and password (8+ characters) required");return}
  var id int64
- e=s.db.QueryRow(r.Context(),"INSERT INTO users(name,email,password_hash,role) VALUES($1,lower($2),$3,'Regular') RETURNING id",strings.TrimSpace(c.Name),strings.TrimSpace(c.Email),passwordHash(c.Password)).Scan(&id)
+ c.Username=strings.ToLower(strings.TrimSpace(c.Username))
+ if c.Username=="" {c.Username=generatedUsername(c.Email)}
+ if !validUsername(c.Username){fail(w,400,"Username must be 3–32 letters, numbers, underscores or hyphens");return}
+ e=s.db.QueryRow(r.Context(),"INSERT INTO users(name,email,username,password_hash,role) VALUES($1,lower($2),$3,$4,'Regular') RETURNING id",strings.TrimSpace(c.Name),strings.TrimSpace(c.Email),c.Username,passwordHash(c.Password)).Scan(&id)
  if e!=nil{fail(w,409,"Unable to create user or email already in use");return}
- respond(w,201,map[string]any{"user":(User{ID:id,Name:strings.TrimSpace(c.Name),Email:strings.ToLower(strings.TrimSpace(c.Email)),Role:"Regular"}).data()})
+ respond(w,201,map[string]any{"user":(User{ID:id,Name:strings.TrimSpace(c.Name),Email:strings.ToLower(strings.TrimSpace(c.Email)),Username:c.Username,Role:"Regular"}).data()})
 }
 func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  w.Header().Set("X-Content-Type-Options","nosniff")
@@ -158,6 +174,13 @@ func migrate(ctx context.Context,db *pgxpool.Pool) error {
  statements:=[]string{
   "CREATE TABLE IF NOT EXISTS users (id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('Admin','Regular')),active BOOLEAN NOT NULL DEFAULT TRUE,must_change_password BOOLEAN NOT NULL DEFAULT FALSE)",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT",
+  "UPDATE users SET username = CASE WHEN email='admin@local.invalid' THEN 'admin' ELSE 'user'||id::text END WHERE username IS NULL",
+  "CREATE UNIQUE INDEX IF NOT EXISTS users_username_ci_unique ON users(lower(username))",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_pending_secret TEXT",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_last_step BIGINT NOT NULL DEFAULT 0",
   "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL)",
   "CREATE TABLE IF NOT EXISTS app_settings (name TEXT PRIMARY KEY,value TEXT NOT NULL)",
   "INSERT INTO app_settings(name,value) VALUES ('workspace_name','NovaNexus Workspace'),('default_meeting_limit','1000'),('session_minutes','480'),('waiting_room_enabled','false'),('waiting_room_message','Please wait for your host to admit you.'),('ai_enabled','true'),('meeting_public_url','') ON CONFLICT(name) DO NOTHING",
