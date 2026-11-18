@@ -8,7 +8,7 @@ async function mfaRequest(body){
  if(!r.ok)throw Error(data.error||'MFA request failed');
  return data;
 }
-export default function AccountSecurity({user}){
+export default function AccountSecurity({user,embedded=false}){
  const [enabled,setEnabled]=useState(!!user?.mfa_enabled);
  const [password,setPassword]=useState('');
  const [code,setCode]=useState('');
@@ -40,9 +40,9 @@ export default function AccountSecurity({user}){
   finally{setBusy(false)}
  }
  const input='w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-indigo-500';
- return <section className="h-full overflow-y-auto bg-[#fafbff] px-5 py-8 md:px-12">
+ return <section className={embedded?'w-full':'h-full overflow-y-auto bg-[#fafbff] px-5 py-8 md:px-12'}>
   <div className="mx-auto max-w-4xl">
-   <div className="mb-8"><h1 className="text-3xl font-black tracking-tight text-slate-900">Account Security</h1><p className="mt-2 text-xs font-bold uppercase tracking-[.2em] text-slate-400">Your sign-in and authentication</p></div>
+   {!embedded&&<div className="mb-8"><h1 className="text-3xl font-black tracking-tight text-slate-900">Account Security</h1><p className="mt-2 text-xs font-bold uppercase tracking-[.2em] text-slate-400">Your sign-in and authentication</p></div>}
    <div className="overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-4">
      <div className="flex gap-4"><div className="rounded-2xl bg-indigo-50 p-4 text-indigo-600"><ShieldCheck size={26}/></div><div><h2 className="text-xl font-black text-slate-900">Two-factor authentication</h2><p className="mt-1 text-sm text-slate-500">Use a six-digit TOTP code from an authenticator app.</p></div></div>
