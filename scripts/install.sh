@@ -66,7 +66,6 @@ NOVANEXUS_TLS_EMAIL=${NOVANEXUS_TLS_EMAIL:-}
 NOVANEXUS_PUBLIC_DOMAIN=${NOVANEXUS_PUBLIC_DOMAIN:-}
 NOVANEXUS_TUNNEL_DOMAIN=${NOVANEXUS_TUNNEL_DOMAIN:-}
 NOVANEXUS_HTTP_PORT=${NOVANEXUS_HTTP_PORT:-}
-NOVANEXUS_TUNNEL_PORT=${NOVANEXUS_TUNNEL_PORT:-}
 LAN_IP=$(detect_ipv4 || true)
 if [[ "$RESUME_INSTALL" == 1 ]]; then
   NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
@@ -83,9 +82,6 @@ if [[ "$RESUME_INSTALL" == 1 ]]; then
   fi
   if [[ -z "$NOVANEXUS_HTTP_PORT" ]]; then
     NOVANEXUS_HTTP_PORT=$(sed -n 's/^NOVANEXUS_HTTP_PORT=//p' "$ROOT_DIR/.env" | head -n1)
-  fi
-  if [[ -z "$NOVANEXUS_TUNNEL_PORT" ]]; then
-    NOVANEXUS_TUNNEL_PORT=$(sed -n 's/^NOVANEXUS_TUNNEL_PORT=//p' "$ROOT_DIR/.env" | head -n1)
   fi
 elif [[ -z "$NOVANEXUS_DOMAIN" ]]; then
   NOVANEXUS_DOMAIN=$(detect_ipv4 || true)
@@ -200,28 +196,14 @@ if [[ "$RESUME_INSTALL" == 0 ]]; then
     log "HTTP port 80 is occupied; using port $NOVANEXUS_HTTP_PORT without touching the existing service."
     log "For publicly trusted TLS with port 80 unavailable, Caddy needs external port 443 for TLS-ALPN-01 or an existing TLS proxy."
   fi
-  [[ -n "$NOVANEXUS_TUNNEL_PORT" ]] || NOVANEXUS_TUNNEL_PORT=18081
-  valid_port "$NOVANEXUS_TUNNEL_PORT" || fail "Tunnel origin port must be 1024–65535."
-  if [[ "$NOVANEXUS_TUNNEL_PORT" == "$NOVANEXUS_HTTP_PORT" ]] || host_port_busy "$NOVANEXUS_TUNNEL_PORT";then
-    for candidate in 18081 18082 18083 28080 28081;do
-      if [[ "$candidate" != "$NOVANEXUS_HTTP_PORT" ]] && ! host_port_busy "$candidate";then NOVANEXUS_TUNNEL_PORT="$candidate";break;fi
-    done
-    [[ "$NOVANEXUS_TUNNEL_PORT" != "$NOVANEXUS_HTTP_PORT" ]] && ! host_port_busy "$NOVANEXUS_TUNNEL_PORT" ||
-      fail "No free tunnel origin port found."
-  fi
   if host_port_busy 443;then
     fail "HTTPS port 443 is already occupied. Preserving https://$NOVANEXUS_DOMAIN requires an available HTTPS listener or an existing reverse proxy/tunnel. An HTTP fallback port cannot replace HTTPS."
   fi
 else
   [[ -n "$NOVANEXUS_HTTP_PORT" ]] || NOVANEXUS_HTTP_PORT=80
-  [[ -n "$NOVANEXUS_TUNNEL_PORT" ]] || NOVANEXUS_TUNNEL_PORT=18081
 fi
 if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]] && ! valid_port "$NOVANEXUS_HTTP_PORT";then fail "Invalid saved HTTP port.";fi
-valid_port "$NOVANEXUS_TUNNEL_PORT" || fail "Invalid saved tunnel port."
-NOVANEXUS_BIND_IP="$LAN_IP"
-if valid_ipv4 "$NOVANEXUS_DOMAIN"; then NOVANEXUS_BIND_IP="$NOVANEXUS_DOMAIN"; fi
-valid_ipv4 "$NOVANEXUS_BIND_IP" || fail "Cannot determine an IPv4 LAN address for the secondary HTTPS listener."
-log "HTTP redirect port $NOVANEXUS_HTTP_PORT; HTTPS ports 443 and $NOVANEXUS_TUNNEL_PORT on $NOVANEXUS_BIND_IP"
+log "HTTP redirect port $NOVANEXUS_HTTP_PORT; one HTTPS origin on port 443: https://$NOVANEXUS_DOMAIN/"
 
 log "Fetching the selected NovaNexus source"
 if [[ "$RESUME_INSTALL" == 0 ]]; then
@@ -253,8 +235,6 @@ TLS_EMAIL=$NOVANEXUS_TLS_EMAIL
 NOVANEXUS_PUBLIC_DOMAIN=$NOVANEXUS_PUBLIC_DOMAIN
 NOVANEXUS_TUNNEL_DOMAIN=$NOVANEXUS_TUNNEL_DOMAIN
 NOVANEXUS_HTTP_PORT=$NOVANEXUS_HTTP_PORT
-NOVANEXUS_TUNNEL_PORT=$NOVANEXUS_TUNNEL_PORT
-NOVANEXUS_BIND_IP=$NOVANEXUS_BIND_IP
 EOF
 else
   stored_address=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' .env | head -n 1)
@@ -280,7 +260,7 @@ fi
 # Synchronize the optional hostname on upgrades without touching credentials.
 # This supports changing a LAN deployment to dual LAN/internet access in-place.
 sed -i '/^NOVANEXUS_PUBLIC_DOMAIN=/d; /^NOVANEXUS_TUNNEL_DOMAIN=/d; /^NOVANEXUS_HTTP_PORT=/d; /^NOVANEXUS_TUNNEL_PORT=/d; /^NOVANEXUS_BIND_IP=/d; /^TLS_EMAIL=/d' .env
-printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\nNOVANEXUS_TUNNEL_DOMAIN=%s\nNOVANEXUS_HTTP_PORT=%s\nNOVANEXUS_TUNNEL_PORT=%s\nNOVANEXUS_BIND_IP=%s\nTLS_EMAIL=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" "$NOVANEXUS_TUNNEL_DOMAIN" "$NOVANEXUS_HTTP_PORT" "$NOVANEXUS_TUNNEL_PORT" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TLS_EMAIL" >>.env
+printf 'NOVANEXUS_PUBLIC_DOMAIN=%s\nNOVANEXUS_TUNNEL_DOMAIN=%s\nNOVANEXUS_HTTP_PORT=%s\nTLS_EMAIL=%s\n' "$NOVANEXUS_PUBLIC_DOMAIN" "$NOVANEXUS_TUNNEL_DOMAIN" "$NOVANEXUS_HTTP_PORT" "$NOVANEXUS_TLS_EMAIL" >>.env
 chmod 600 .env
 LIVEKIT_KEY=$(sed -n "s/^LIVEKIT_API_KEY=//p" .env | head -n1)
 LIVEKIT_SECRET=$(sed -n "s/^LIVEKIT_API_SECRET=//p" .env | head -n1)
@@ -373,8 +353,8 @@ docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adap
 docker compose restart https >/dev/null || fail "Could not restart HTTPS proxy with updated configuration."
 log "Checking HTTPS certificate and application health"
 CURL_CA=()
-# The secondary HTTPS listener always uses a local CA, even when the primary
-# hostname has a publicly trusted certificate.
+# The same primary HTTPS listener serves local browsers and Cloudflare.
+# Export the internal CA for locally issued IP certificates.
 CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
 docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
 chmod 644 "$CA_FILE"
@@ -402,20 +382,6 @@ if [[ "$verified" != true ]]; then
   docker compose logs --tail=60 https app db >&2 || true
   fail "Local HTTPS health verification failed. Proxy settings, certificate mismatch or application health may be responsible; inspect the error above."
 fi
-# Verify the secondary HTTPS listener on the appliance IP, with the local CA.
-SECONDARY_HTTPS_VERIFIED=false
-for tunnel_attempt in 1 2 3 4 5; do
-  if curl --noproxy "*" --fail --silent --show-error --connect-timeout 3 --max-time 7 --cacert "$CA_FILE" --resolve "$NOVANEXUS_DOMAIN:$NOVANEXUS_TUNNEL_PORT:$NOVANEXUS_BIND_IP" "https://$NOVANEXUS_DOMAIN:$NOVANEXUS_TUNNEL_PORT/api/health" 2>/dev/null | grep -q '"status":"ok"'; then
-    SECONDARY_HTTPS_VERIFIED=true
-    break
-  fi
-  sleep 2
-done
-if [[ "$SECONDARY_HTTPS_VERIFIED" == true ]]; then
-  log "Additional LAN HTTPS port passed certificate and API health checks."
-else
-  fail "Additional HTTPS listener is not healthy on $NOVANEXUS_BIND_IP:$NOVANEXUS_TUNNEL_PORT."
-fi
 # A local loopback request verifies that Caddy can present a publicly trusted
 # certificate for the optional hostname. This is NOT an outside-network test.
 PUBLIC_HTTPS_VERIFIED=false
@@ -437,10 +403,9 @@ if [[ -n "$PUBLIC_HTTPS_HOST" ]]; then
 fi
 printf "\n==========================================\n"
 printf "NovaNexus Web GUI: https://%s/\n" "$NOVANEXUS_DOMAIN"
-printf "Additional HTTPS endpoint: https://%s:%s/\n" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TUNNEL_PORT"
-printf "Cloudflare Tunnel origin service (HTTPS): https://%s:%s\n" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TUNNEL_PORT"
-printf "Cloudflare origin CA certificate: %s\n" "$CA_FILE"
-printf "Cloudflare route: configure HTTPS for %s:%s and trust the local CA on the connector host.\n" "$NOVANEXUS_BIND_IP" "$NOVANEXUS_TUNNEL_PORT"
+printf "Cloudflare Tunnel origin (same as local GUI): https://%s/\n" "$NOVANEXUS_DOMAIN"
+printf "Cloudflare origin CA certificate (for local IP certificates): %s\n" "$CA_FILE"
+printf "Cloudflare route: HTTPS to %s:443; no second IP or port. Trust the local CA on cloudflared's host.\n" "$NOVANEXUS_DOMAIN"
 printf "Run origin diagnostics: bash %s/scripts/check-cloudflare-origin.sh\n" "$ROOT_DIR"
 if [[ "$NOVANEXUS_HTTP_PORT" != 80 ]];then
   log "Existing service owns TCP 80. NovaNexus uses host HTTP port $NOVANEXUS_HTTP_PORT; the HTTPS GUI stays on port 443."

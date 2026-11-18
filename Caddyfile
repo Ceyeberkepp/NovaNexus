@@ -26,11 +26,5 @@
 {$NOVANEXUS_DOMAIN} {
     import novanexus_routes
 }
-# Optional second HTTPS listener, reachable on the appliance LAN IP and configured port.
-# The installer uses an internal certificate to avoid exposing an HTTP origin.
-{$NOVANEXUS_DOMAIN}:8443 {
-    tls internal
-    import novanexus_routes
-}
 # The installer renders this file. Keep it present even on LAN-only deployments.
 import /etc/caddy/additional-sites.caddy
