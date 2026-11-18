@@ -18,11 +18,17 @@ func (s *Server) messagesAPI(w http.ResponseWriter, r *http.Request) {
  var exists bool
  if e=s.db.QueryRow(r.Context(),"SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND active=TRUE)",peer).Scan(&exists);e!=nil||!exists {fail(w,404,"User not found");return}
  if r.Method=="GET" {
-  rows,e:=s.db.Query(r.Context(),`SELECT id,sender_id,body,created_at FROM (SELECT id,sender_id,body,created_at FROM direct_messages WHERE (sender_id=$1 AND recipient_id=$2) OR (sender_id=$2 AND recipient_id=$1) ORDER BY id DESC LIMIT 200) AS recent ORDER BY id ASC`,u.ID,peer)
+  rows,e:=s.db.Query(r.Context(),`SELECT recent.id,recent.sender_id,recent.body,recent.created_at,COALESCE(a.filename,''),COALESCE(a.content_type,''),COALESCE(a.size_bytes,0) FROM (SELECT id,sender_id,body,created_at FROM direct_messages WHERE (sender_id=$1 AND recipient_id=$2) OR (sender_id=$2 AND recipient_id=$1) ORDER BY id DESC LIMIT 200) AS recent LEFT JOIN message_attachments a ON a.message_id=recent.id ORDER BY recent.id ASC`,u.ID,peer)
   if e!=nil{fail(w,500,"Messages unavailable");return}
   defer rows.Close()
   messages:=make([]map[string]any,0)
-  for rows.Next(){var id,from int64;var body string;var when time.Time;if e=rows.Scan(&id,&from,&body,&when);e!=nil{fail(w,500,"Messages unavailable");return};messages=append(messages,map[string]any{"id":id,"sender":from,"text":body,"created_at":when})}
+  for rows.Next(){
+   var id,from int64;var body,name,kind string;var size int;var when time.Time
+   if e=rows.Scan(&id,&from,&body,&when,&name,&kind,&size);e!=nil{fail(w,500,"Messages unavailable");return}
+   item:=map[string]any{"id":id,"sender":from,"text":body,"created_at":when}
+   if name!="" {item["attachment"]=map[string]any{"name":name,"type":kind,"size":size,"url":"/api/messages/attachment?id="+strconv.FormatInt(id,10)}}
+   messages=append(messages,item)
+  }
   if rows.Err()!=nil{fail(w,500,"Messages unavailable");return}
   respond(w,200,map[string]any{"messages":messages});return
  }

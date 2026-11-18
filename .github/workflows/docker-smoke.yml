@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
           for i in $(seq 1 45); do
             if docker compose exec -T app wget -q -O - http://127.0.0.1:3000/api/health | grep -q '"ok"'; then
-              docker compose exec -T app wget -q -O - http://127.0.0.1:3000/ | grep -q 'NovaNexus'
+              docker compose exec -T app wget -q -O - http://127.0.0.1:3000/ | grep -q 'Nexus Workspace'
               exit 0
             fi
             sleep 2

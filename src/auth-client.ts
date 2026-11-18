@@ -53,7 +53,7 @@ export function signOut(): Promise<{ok:boolean}> {
   return apiRequest('/api/auth/logout',{method:'POST',body:'{}'});
 }
 
-export interface DirectMessage { id: number; sender: number; text: string; created_at: string; }
+export interface DirectMessage { id: number; sender: number; text: string; created_at: string; attachment?: { name:string; type:string; size:number; url:string }; }
 export interface CalendarEvent { id: number; title: string; date: string; time: string; duration: number; attendees: string[]; link: string; type: string; }
 export function getMessages(peer: number): Promise<{messages: DirectMessage[]}> {
   return apiRequest('/api/messages?peer=' + encodeURIComponent(String(peer)));

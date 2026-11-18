@@ -1035,6 +1035,8 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
     const [selectedChat, setSelectedChat] = useState(null);
     const [messages, setMessages] = useState({});
     const [chatError, setChatError] = useState("");
+    const attachmentInputRef=useRef(null);
+    const [uploadingAttachment,setUploadingAttachment]=useState(false);
     const [prefs,setPrefs] = useState(()=>readChatPreferences(currentUser?.id||0));
     const [recentMap,setRecentMap] = useState({});
     const lastSeenRef=useRef({});
@@ -1081,7 +1083,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
           lastSeenRef.current[peer]=Math.max(lastSeen||0,newest);
           setMessages(previous=>({...previous,[peer]:list.map(m=>({
             id:m.id,text:m.text,sender:Number(m.sender)===Number(currentUser?.id)?'me':String(m.sender),
-            timestamp:m.created_at,time:formatMessageTime(m.created_at)
+            timestamp:m.created_at,time:formatMessageTime(m.created_at),attachment:m.attachment||null
           }))}));
         }catch(e){if(active)setChatError(e.message);}
       }
@@ -1123,7 +1125,25 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
       } catch(e){setChatError(e.message||"Message not sent");}
     };
     
-    const handleCreateGroup = () => {
+    const uploadAttachment=async file=>{
+      if(!file||!selectedChat)return;
+      if(selectedChat.members){setChatError('Group attachments are not enabled yet');return;}
+      if(file.size>10*1024*1024){setChatError('Files must be 10 MB or smaller');return;}
+      setChatError('');setUploadingAttachment(true);
+      try{
+        const form=new FormData();form.append('file',file,file.name);
+        const res=await fetch('/api/messages/attachment?peer='+encodeURIComponent(selectedChat.id),{method:'POST',credentials:'same-origin',body:form});
+        const payload=await res.json().catch(()=>({}));
+        if(!res.ok)throw new Error(payload.error||'Upload failed');
+        const m=payload.message;
+        setMessages(previous=>({...previous,[selectedChat.id]:[...(previous[selectedChat.id]||[]),{
+          id:m.id,text:m.text,sender:'me',attachment:m.attachment,timestamp:m.created_at,time:formatMessageTime(m.created_at)
+        }]}));
+        setRecentMap(p=>({...p,[Number(selectedChat.id)]:Date.now()}));
+      }catch(error){setChatError(error.message||'Upload failed');}
+      finally{setUploadingAttachment(false);if(attachmentInputRef.current)attachmentInputRef.current.value='';}
+    };
+        const handleCreateGroup = () => {
         if(!newGroupName || selectedUsersForGroup.length === 0) return;
         const newGroup = { 
             id: `g-${Date.now()}`, 
@@ -1345,7 +1365,12 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                                         <div key={idx} className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
                                             <div className={`max-w-[70%] p-4 rounded-2xl text-[12px] font-medium leading-relaxed shadow-sm ${msg.sender === 'me' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-slate-100 text-slate-700 rounded-bl-none'}`}>
                                                 {msg.sender !== 'me' && selectedChat.members && <div className="text-[10px] font-bold text-indigo-600 mb-1">{msg.sender}</div>}
-                                                {msg.text}
+                                                {msg.attachment
+                                                  ? <div className="space-y-2">
+                                                      {msg.attachment.type?.startsWith('image/')&&<a href={msg.attachment.url} target="_blank" rel="noopener noreferrer"><img src={msg.attachment.url} alt={msg.attachment.name} loading="lazy" className="max-h-64 max-w-full rounded-lg object-contain"/></a>}
+                                                      <a href={msg.attachment.url} download={msg.attachment.name} className="block break-all underline underline-offset-2">{msg.attachment.name} · {Math.ceil(msg.attachment.size/1024)} KB</a>
+                                                    </div>
+                                                  : msg.text}
                                                 <div className={`mt-1.5 text-[9px] font-bold uppercase tracking-wider opacity-70 text-right ${msg.sender === 'me' ? 'text-indigo-200' : 'text-slate-400'}`}>{msg.time}</div>
                                             </div>
                                         </div>
@@ -1364,8 +1389,9 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                                 <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-3 max-w-4xl mx-auto w-full">
                                     <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-2 focus-within:ring-2 focus-within:ring-indigo-50 focus-within:border-indigo-200 transition-all">
                                         <input className="flex-1 px-3 py-3.5 bg-transparent border-none outline-none text-xs font-medium text-slate-700 placeholder:text-slate-400" placeholder="Type a message..." value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&prefs.sendCtrlEnter){e.preventDefault();if(e.ctrlKey)sendMessage();}}}/>
-                                        <button type="button" className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><ImageIcon size={18}/></button>
-                                        <button type="button" className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><MessageCircle size={18}/></button>
+                                        <input ref={attachmentInputRef} type="file" className="hidden" aria-label="Choose file or photo to send" onChange={e=>uploadAttachment(e.target.files?.[0])}/>
+                                        <button type="button" disabled={uploadingAttachment} title="Attach photo or file" aria-label="Attach photo or file" onClick={()=>attachmentInputRef.current?.click()} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"><ImageIcon size={18}/></button>
+                                        <button type="button" disabled={uploadingAttachment} title="Attach document" aria-label="Attach document" onClick={()=>attachmentInputRef.current?.click()} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40"><UploadCloud size={18}/></button>
                                     </div>
                                     <button type="submit" className="bg-indigo-600 w-12 h-12 flex items-center justify-center rounded-xl text-white shadow-lg shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"><Send size={18}/></button>
                                 </form>
