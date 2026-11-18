@@ -35,6 +35,10 @@ jobs:
       - name: Check installer syntax and runtime manifest
         run: |
           bash -n scripts/install.sh
+          bash -n scripts/check-media.sh
+          grep -q 'NOVANEXUS_MEDIA_MODE=public' scripts/install.sh
+          grep -q 'use_external_ip: true' scripts/install.sh
+          grep -q 'Cloudflare HTTP tunnels carry WSS signaling' scripts/check-media.sh
           docker compose config --quiet
           test -f Dockerfile
           test -f Caddyfile
