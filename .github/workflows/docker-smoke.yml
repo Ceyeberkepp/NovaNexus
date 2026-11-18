@@ -74,6 +74,26 @@ jobs:
           done
           docker compose logs --tail=100 https app db
           exit 1
+      - name: Verify simultaneous LAN IP and second HTTPS hostname
+        run: |
+          set -euo pipefail
+          cat > additional-sites.caddy <<'EOF'
+          nexus-public.example.test {
+              tls internal
+              import novanexus_routes
+          }
+          EOF
+          docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker compose restart https
+          for n in $(seq 1 20); do
+            if curl -fsS --noproxy "*" --resolve "nexus-public.example.test:443:127.0.0.1" --cacert /tmp/novanexus-local-ca.crt https://nexus-public.example.test/api/health | grep -q '"status":"ok"'; then
+              curl -fsS --noproxy "*" --resolve "127.0.0.1:443:127.0.0.1" --cacert /tmp/novanexus-local-ca.crt https://127.0.0.1/api/health | grep -q '"status":"ok"'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --tail=80 https
+          exit 1
       - name: Container logs on failure
         if: failure()
         run: docker compose logs --tail=100 app db
