@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import QRCode from 'qrcode';
 import {ShieldCheck,KeyRound,Copy,CheckCircle2,AlertTriangle,LockKeyhole} from 'lucide-react';
 
 async function mfaRequest(body){
@@ -12,6 +13,17 @@ export default function AccountSecurity({user}){
  const [password,setPassword]=useState('');
  const [code,setCode]=useState('');
  const [setup,setSetup]=useState(null);
+ const [qrImage,setQrImage]=useState('');
+ useEffect(()=>{
+  let cancelled=false;
+  setQrImage('');
+  if(setup?.uri){
+   QRCode.toDataURL(setup.uri,{errorCorrectionLevel:'M',width:256,margin:2,color:{dark:'#171429',light:'#FFFFFF'}})
+    .then(value=>{if(!cancelled)setQrImage(value)})
+    .catch(()=>{if(!cancelled)setNotice('Could not render QR code. Use the manual setup key below.')});
+  }
+  return()=>{cancelled=true};
+ },[setup?.uri]);
  const [recovery,setRecovery]=useState([]);
  const [notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false);
@@ -20,7 +32,7 @@ export default function AccountSecurity({user}){
   setBusy(true);setNotice('');
   try{
    const data=await mfaRequest({action,password,code});
-   if(action==='begin'){setSetup(data);setNotice('Enter this secret into your authenticator app, then confirm with a 6-digit code.')}
+   if(action==='begin'){setSetup(data);setNotice('Scan the QR code using your authenticator app, then confirm with its current six-digit code.')}
    if(action==='confirm'){setSetup(null);setEnabled(true);setRecovery(data.recoveryCodes||[]);setNotice('MFA is active. Save all recovery codes in a password manager; they will not be displayed again.')}
    if(action==='disable'){setEnabled(false);setRecovery([]);setSetup(null);setNotice('MFA disabled for your account.')}
    setCode('');setPassword('');
@@ -40,7 +52,7 @@ export default function AccountSecurity({user}){
      {notice&&<p role="status" className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-sm text-indigo-900">{notice}</p>}
      {recovery.length>0?<div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5"><h3 className="font-bold text-amber-900">Save your recovery codes now</h3><p className="text-xs text-amber-800">Each code works once if you lose access to your authenticator. These codes cannot be displayed again.</p><div className="grid grid-cols-2 gap-2">{recovery.map(c=><code className="rounded-lg bg-white p-3 text-center text-sm font-bold" key={c}>{c}</code>)}</div><button onClick={()=>navigator.clipboard.writeText(recovery.join('\n'))} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-bold text-white"><Copy size={15}/> Copy recovery codes</button><button className="ml-3 text-sm font-semibold text-amber-800 underline" onClick={()=>setRecovery([])}>I've saved the codes</button></div>:
      <>
-      {setup&&<div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-5"><h3 className="font-bold text-indigo-900">Add NovaNexus to your authenticator</h3><p className="text-xs text-slate-600">Choose “Enter setup key” in your authenticator app. Use a time-based six-digit code.</p><div className="flex flex-wrap items-center gap-3"><code className="max-w-full break-all rounded-lg bg-white p-3 font-mono text-sm">{setup.secret}</code><button aria-label="Copy authenticator setup secret" onClick={()=>navigator.clipboard.writeText(setup.secret)} className="rounded-lg border p-3"><Copy size={16}/></button></div><a className="block break-words text-xs text-indigo-700 underline" href={setup.uri}>Open authenticator setup link (supported apps)</a></div>}
+      {setup&&<div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-5"><h3 className="font-bold text-indigo-900">Add NovaNexus to your authenticator</h3><p className="text-xs text-slate-600">Scan this QR code with Microsoft Authenticator, Google Authenticator, 1Password or another TOTP app. Generated locally in your browser; no third-party QR service.</p>{qrImage&&<img alt="Scan this authenticator enrollment QR code" className="w-56 h-56 rounded-xl border border-indigo-100 bg-white p-2" src={qrImage}/>}<p className="text-xs text-slate-600">Can't scan? Enter this time-based setup key manually:</p><div className="flex flex-wrap items-center gap-3"><code className="max-w-full break-all rounded-lg bg-white p-3 font-mono text-sm">{setup.secret}</code><button aria-label="Copy authenticator setup secret" onClick={()=>navigator.clipboard.writeText(setup.secret)} className="rounded-lg border p-3"><Copy size={16}/></button></div><a className="block break-words text-xs text-indigo-700 underline" href={setup.uri}>Open authenticator setup link (supported apps)</a></div>}
       <label className="block text-sm font-semibold text-slate-700">Your current account password<input className={input+' mt-2'} autoComplete="current-password" type="password" value={password} onChange={e=>setPassword(e.target.value)}/></label>
       {(enabled||setup)&&<label className="block text-sm font-semibold text-slate-700">{enabled?'6-digit authenticator code or recovery code':'Enter a six-digit code to complete setup'}<input className={input+' mt-2'} value={code} autoComplete="one-time-code" inputMode="numeric" maxLength={30} placeholder="123456" onChange={e=>setCode(e.target.value.trim())}/></label>}
       <div className="flex flex-wrap gap-3">{!enabled&&!setup&&<button disabled={busy||!password} className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-40" onClick={()=>perform('begin')}>Set up MFA</button>}
