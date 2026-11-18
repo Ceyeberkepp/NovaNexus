@@ -236,9 +236,13 @@ PUBLIC_MEDIA=0
 if [[ -n "$NOVANEXUS_PUBLIC_DOMAIN" || "$TLS_MODE" == public ]]; then PUBLIC_MEDIA=1; fi
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   MEDIA_RTC_CONFIG='  use_external_ip: true'
+  MEDIA_TURN_CONFIG='turn:
+  enabled: true
+  udp_port: 3478'
 else
   MEDIA_RTC_CONFIG="  use_external_ip: false
   node_ip: $NOVANEXUS_DOMAIN"
+  MEDIA_TURN_CONFIG=""
 fi
 cat >livekit.yaml <<LIVEKIT_CONFIGURATION
 port: 7880
@@ -248,6 +252,7 @@ rtc:
 $MEDIA_RTC_CONFIG
 room:
   max_participants: 1000
+$MEDIA_TURN_CONFIG
 keys:
   "$LIVEKIT_KEY": "$LIVEKIT_SECRET"
 LIVEKIT_CONFIGURATION
@@ -346,8 +351,8 @@ elif [[ "$TLS_MODE" == public ]]; then
   printf "Public Web GUI (after DNS + router setup): https://%s/\n" "$NOVANEXUS_DOMAIN"
 fi
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
-  log "Internet media requires reachable TCP 7881 and UDP 7882; HTTPS on TCP 443 alone does NOT carry WebRTC media."
-  log "Forward TCP 80/443 and TCP 7881 + UDP 7882 from the public gateway to this host, unless an existing secure ingress/relay handles those services."
+  log "Internet media requires reachable TCP 7881, UDP 7882 and TURN UDP 3478; HTTPS on TCP 443 alone does NOT carry WebRTC media."
+  log "Forward TCP 80/443, TCP 7881, UDP 7882 and UDP 3478 from the public gateway to this host, unless an existing secure ingress/relay handles those services."
   log "Internet access is NOT confirmed by this local health check. Verify from a device outside the LAN."
 fi
 
