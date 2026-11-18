@@ -4,6 +4,7 @@ import (
  "crypto/hmac"
  "crypto/sha256"
  "encoding/base64"
+ "net"
  "net/http"
  "os"
  "strconv"
@@ -11,6 +12,34 @@ import (
  "time"
  "unicode/utf8"
 )
+
+// Limit guest token requests separately per client and per actual origin.
+// Cloudflare's forwarded IP distinguishes clients when supplied. A separate,
+// non-bypassable per-origin cap prevents a forged header bypass.
+func (s *Server) guestMeetingRateLimited(r *http.Request,room string) bool {
+ peer,_,err:=net.SplitHostPort(r.RemoteAddr);if err!=nil{peer=r.RemoteAddr}
+ client:=peer
+ if forwarded:=net.ParseIP(strings.TrimSpace(r.Header.Get("CF-Connecting-IP")));forwarded!=nil{client=forwarded.String()}
+ now:=time.Now()
+ s.visitMu.Lock()
+ defer s.visitMu.Unlock()
+ if s.visitors==nil{s.visitors=make(map[string]visitorWindow)}
+ denied:=false
+ for _,b:=range []struct{key string;max int}{
+  {"meeting-guest:"+room+":client:"+client,60},
+  {"meeting-guest:"+room+":origin:"+peer,3000},
+ } {
+  v:=s.visitors[b.key]
+  if now.Sub(v.Start)>time.Minute||v.Start.IsZero(){v=visitorWindow{Start:now}}
+  v.Count++
+  s.visitors[b.key]=v
+  if v.Count>b.max{denied=true}
+ }
+ if len(s.visitors)>15000 {
+  for k,v:=range s.visitors {if now.Sub(v.Start)>time.Minute{delete(s.visitors,k)}}
+ }
+ return denied
+}
 
 // guestMeetingTokenAPI mints a short-lived, meeting-only LiveKit token.
 // Guests do not exist in the workspace users or sessions tables.
@@ -24,7 +53,7 @@ func (s *Server) guestMeetingTokenAPI(w http.ResponseWriter,r *http.Request) {
   fail(w,400,"A valid meeting ID and guest name (2–80 characters) are required");return
  }
  // Apply account/IP throttling BEFORE querying a stored password.
- if s.limited(r,"guest-meeting:"+req.Room) {fail(w,429,"Too many guest join attempts; try again later");return}
+ if s.guestMeetingRateLimited(r,req.Room) {fail(w,429,"Too many guest join attempts; try again later");return}
  var kind,stored string
  err:=s.db.QueryRow(r.Context(),"SELECT kind,guest_password_hash FROM meeting_rooms WHERE room=$1 AND closed=FALSE",req.Room).Scan(&kind,&stored)
  if err!=nil||kind!="normal"{fail(w,404,"Meeting unavailable");return}
