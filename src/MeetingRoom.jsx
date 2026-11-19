@@ -86,7 +86,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
           : 'Unable to connect to the meeting server: '+raw);
       }}
       style={{height:'100%'}}>
-      <ConferenceStage roomId={roomId} onEnd={leave}/>
+      <ConferenceStage roomId={roomId} onEnd={leave} videoPreferences={prefs}/>
       {!user?.isGuest&&<MeetingExtras shareUrl={shareUrl} roomId={roomId} maxParticipants={connection.maxParticipants} user={user} isHost={connection.isHost} onOpenSettings={()=>setShowSettings(true)} onSwitchBreakout={switchBreakout} activeBreakoutId={activeBreakoutId}/>}
       {showSettings&&<ConnectedSettings userId={user?.id||0} settings={prefs} onSave={setPrefs} onClose={()=>setShowSettings(false)}/>}
     </LiveKitRoom>
