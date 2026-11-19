@@ -22,7 +22,7 @@ func validSAMLProvider(entityID, loginURL, certificate string) bool {
  block,_:=pem.Decode([]byte(certificate))
  if block==nil||block.Type!="CERTIFICATE" {return false}
  cert,e:=x509.ParseCertificate(block.Bytes)
- return e==nil && !cert.IsCA && strings.TrimSpace(cert.Subject.String())!=""
+ return e==nil && cert.PublicKey!=nil
 }
 
 func (s *Server) samlConfigurationAPI(w http.ResponseWriter,r *http.Request) {
