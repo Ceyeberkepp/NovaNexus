@@ -2038,7 +2038,8 @@ function App() {
                 <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Sparkles />} label="AI Assistant" active={currentTab === 'ai'} onClick={() => setCurrentTab('ai')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<LayoutGrid />} label="Apps" active={currentTab === 'apps'} onClick={() => setCurrentTab('apps')} collapsed={sidebarCollapsed} />
-                {pinnedApps.filter(id=>!['chats','calls','schedule','ai','admin'].includes(id)).map(id=>{
+                {pinnedApps.length>0&&<div className={sidebarCollapsed?'mt-3 border-t border-slate-100':'mx-4 mt-3 border-t border-slate-100 pt-3 text-[10px] font-bold uppercase tracking-widest text-slate-400'}>{!sidebarCollapsed&&'Pinned apps'}</div>}
+                {pinnedApps.map(id=>{
                   const app=NEXUS_APPS.find(a=>a.id===id);
                   if(!app||app.adminOnly&&user?.role!=='Admin')return null;
                   const Icon=app.icon;
@@ -2199,7 +2200,8 @@ function App() {
                   <Calendar size={24} />
                   <span className="text-[10px] font-bold">Plan</span>
               </button>
-              {user?.role === 'Admin' && <button onClick={() => setCurrentTab('admin')} className={`flex flex-col items-center gap-1 ${currentTab === 'admin' ? 'text-indigo-600' : 'text-slate-400'}`}>
+              <button onClick={() => setCurrentTab('apps')} className={`flex flex-col items-center gap-1 ${currentTab === 'apps' ? 'text-indigo-600' : 'text-slate-400'}`}><LayoutGrid size={24}/><span className="text-[10px] font-bold">Apps</span></button>
+                            {user?.role === 'Admin' && <button onClick={() => setCurrentTab('admin')} className={`flex flex-col items-center gap-1 ${currentTab === 'admin' ? 'text-indigo-600' : 'text-slate-400'}`}>
                   <Shield size={24} />
                   <span className="text-[10px] font-bold">Admin</span>
               </button>}
