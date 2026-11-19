@@ -291,8 +291,16 @@ sed -i '/^NOVANEXUS_MEDIA_MODE=/d' .env
 printf 'NOVANEXUS_MEDIA_MODE=%s\n' "$NOVANEXUS_MEDIA_MODE" >> .env
 log "LiveKit media mode: $NOVANEXUS_MEDIA_MODE"
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
+  # Nested LXC -> Docker and home NAT commonly cannot self-ping the public
+  # IP, even when it is actually reachable from 5G clients. Keep STUN public
+  # discovery and the LAN candidate, and avoid rejecting the public IP due
+  # solely to a failed NAT hairpin/self-validation probe.
   MEDIA_RTC_CONFIG='  use_external_ip: true
-  advertise_internal_ip: true'
+  advertise_internal_ip: true
+  skip_external_ip_validation: true
+  allow_tcp_fallback: true
+  tcp_fallback_rtt_threshold: 1500
+  allow_udp_unstable_fallback: true'
   MEDIA_TURN_CONFIG='turn:
   enabled: true
   udp_port: 3478'

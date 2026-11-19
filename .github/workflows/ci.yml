@@ -40,6 +40,7 @@ jobs:
         run: |
           bash -n scripts/install.sh
           bash scripts/test-port-detection.sh
+          bash scripts/test-media-fallback.sh
       - name: Build frontend
         run: |
           npm install --no-audit --no-fund

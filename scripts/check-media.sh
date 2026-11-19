@@ -16,7 +16,7 @@ printf 'Media mode: %s\n' "${mode:-unconfigured (older installation)}"
 printf 'Tunnel domain recorded: %s\n' "${tunnel:-not configured in installer}"
 printf 'Other public hostname recorded: %s\n' "${public:-not configured}"
 echo "ICE configuration:"
-grep -E '^[[:space:]]*(use_external_ip|advertise_internal_ip|node_ip|tcp_port|udp_port|enabled):' livekit.yaml | head -n 15 || true
+grep -E '^[[:space:]]*(use_external_ip|advertise_internal_ip|skip_external_ip_validation|allow_tcp_fallback|tcp_fallback_rtt_threshold|allow_udp_unstable_fallback|node_ip|tcp_port|udp_port|enabled):' livekit.yaml | head -n 20 || true
 echo ""
 echo "Docker services:"
 docker compose ps livekit https || true
@@ -41,4 +41,13 @@ if ! grep -Eq '^[[:space:]]+use_external_ip:[[:space:]]+true' livekit.yaml; then
  echo "ERROR: Public media mode saved but LiveKit is not configured for public ICE candidates." >&2
  exit 1
 fi
+if ! grep -Eq '^[[:space:]]+allow_udp_unstable_fallback:[[:space:]]+true' livekit.yaml; then
+ echo "NOTICE: Deployed LiveKit is not configured to migrate away from lossy UDP."
+ echo "Re-run the updated one-click installer to enable TCP fallback."
+fi
+if ! grep -Eq '^[[:space:]]+skip_external_ip_validation:[[:space:]]+true' livekit.yaml; then
+ echo "NOTICE: NAT hairpin validation may hide the public IP on nested LXC and Docker."
+fi
 echo "Public ICE candidate mode is configured. External port forwarding/relay is STILL UNVERIFIED."
+echo "IMPORTANT: A corporate firewall that blocks UDP and direct TCP 7881 still requires reachable TURN/TLS (preferably TCP 443 on a distinct public endpoint)."
+echo "TCP 443 to the Cloudflare webpage alone cannot transport media."
