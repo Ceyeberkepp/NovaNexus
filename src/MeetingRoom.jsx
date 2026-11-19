@@ -17,12 +17,13 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const switchingRef=useRef(false);
   const autostartedRef=useRef(false);
   const retryTimerRef=useRef(null);
+  const stableTimerRef=useRef(null);
   const retryAttemptsRef=useRef(0);
   const activeRoomRef=useRef(true);
   const connectedRef=useRef(false);
   const recoveryPendingRef=useRef(false);
   const [reconnecting,setReconnecting]=useState(false);
-  useEffect(()=>{activeRoomRef.current=true;return ()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current)}},[]);
+  useEffect(()=>{activeRoomRef.current=true;return ()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current);if(stableTimerRef.current)clearTimeout(stableTimerRef.current)}},[]);
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
   const [meetingBaseURL,setMeetingBaseURL]=useState(window.location.origin);
   useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}const requested=String(data?.settings?.meeting_public_url||'');if(active&&requested.startsWith('https://'))setMeetingBaseURL(requested.replace(/\/$/ ,''));}).catch(()=>{});return ()=>{active=false;};},[]);
@@ -68,6 +69,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const leave=()=>{
     activeRoomRef.current=false;
     if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
+    if(stableTimerRef.current){clearTimeout(stableTimerRef.current);stableTimerRef.current=null;}
     recoveryPendingRef.current=false;
     setEnded(true);onEnd();
   };
@@ -75,6 +77,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
     if(!activeRoomRef.current||switchingRef.current)return;
     if(recoveryPendingRef.current)return;
     recoveryPendingRef.current=true;
+    if(stableTimerRef.current){clearTimeout(stableTimerRef.current);stableTimerRef.current=null;}
     connectedRef.current=false;
     setConnection(null);
     setError(message);
@@ -112,7 +115,13 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       onConnected={()=>{
         connectedRef.current=true;
         recoveryPendingRef.current=false;
-        retryAttemptsRef.current=0;
+        // A short-lived ICE connection is not proof of stability. Do not
+        // reset the retry budget until the call stays up for 30 seconds.
+        if(stableTimerRef.current)clearTimeout(stableTimerRef.current);
+        stableTimerRef.current=window.setTimeout(()=>{
+          if(activeRoomRef.current&&connectedRef.current)retryAttemptsRef.current=0;
+          stableTimerRef.current=null;
+        },30000);
         if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
         setReconnecting(false);
         setError('');
