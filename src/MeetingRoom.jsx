@@ -106,7 +106,10 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   if(connection&&!ended)return <div className="h-screen w-screen bg-zinc-950 text-white relative" data-lk-theme="default">
     <div className="absolute top-3 left-3 z-50 rounded-xl bg-zinc-900/90 border border-white/10 text-white p-2 flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold">Meeting: {roomId}{activeBreakoutId>0?` · Breakout ${activeBreakoutId}`:""}</span>{copyFeedback&&<span role="status">{copyFeedback}</span>}</div>
     <LiveKitRoom
-      key={activeBreakoutId}
+      // A fresh token must create a fresh Room instance after an ICE failure.
+      // The breakout ID alone stays unchanged during recovery and would reuse
+      // the disconnected LiveKit instance rather than reconnecting.
+      key={`${activeBreakoutId}:${connection.token}`}
       serverUrl={connection.serverUrl}
       token={connection.token}
       connect={true}
