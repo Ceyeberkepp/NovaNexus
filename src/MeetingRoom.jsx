@@ -16,6 +16,11 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const [activeBreakoutId,setActiveBreakoutId] = useState(0);
   const switchingRef=useRef(false);
   const autostartedRef=useRef(false);
+  const retryTimerRef=useRef(null);
+  const retryAttemptsRef=useRef(0);
+  const activeRoomRef=useRef(true);
+  const [reconnecting,setReconnecting]=useState(false);
+  useEffect(()=>()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current)},[]);
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
   const [meetingBaseURL,setMeetingBaseURL]=useState(window.location.origin);
   useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}const requested=String(data?.settings?.meeting_public_url||'');if(active&&requested.startsWith('https://'))setMeetingBaseURL(requested.replace(/\/$/ ,''));}).catch(()=>{});return ()=>{active=false;};},[]);
@@ -58,7 +63,28 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
     }catch(err){setError(err.message||'Video connection unavailable');}
     finally{setLoading(false);}
   }
-  const leave=()=>{setEnded(true);onEnd();};
+  const leave=()=>{
+    activeRoomRef.current=false;
+    if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
+    setEnded(true);onEnd();
+  };
+  function recoverConnection(message){
+    if(!activeRoomRef.current||switchingRef.current)return;
+    setConnection(null);
+    setError(message);
+    if(retryTimerRef.current||retryAttemptsRef.current>=2){setReconnecting(false);return;}
+    retryAttemptsRef.current+=1;
+    const attempt=retryAttemptsRef.current;
+    setReconnecting(true);
+    retryTimerRef.current=window.setTimeout(async()=>{
+      retryTimerRef.current=null;
+      if(!activeRoomRef.current)return;
+      // Fetch a fresh room token; never reuse the previous failed WebRTC
+      // connection or interrupt LiveKit's built-in transient reconnection.
+      await join(activeBreakoutId,true);
+      if(activeRoomRef.current)setReconnecting(false);
+    },1500*attempt);
+  }
   async function switchBreakout(id){
     if(id===activeBreakoutId)return;
     switchingRef.current=true;
@@ -76,14 +102,16 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       connect={true}
       audio={audioOnly?true:(prefs.callMicEnabled===false?false:{echoCancellation:prefs.callEchoCancellation!==false,noiseSuppression:prefs.callNoiseSuppression!==false,...(prefs.callAudioDevice?{deviceId:prefs.callAudioDevice}:{})})}
       video={audioOnly?false:prefs.callCamEnabled===false?false:{resolution:({ '360p':{width:640,height:360}, '720p':{width:1280,height:720}, '1080p':{width:1920,height:1080}}[prefs.callQuality]||{width:1280,height:720}),...(prefs.callVideoDevice?{deviceId:prefs.callVideoDevice}:{})}}
-      onDisconnected={()=>{if(!switchingRef.current){setConnection(null);setError('Call disconnected. Check your network connection or try joining again.');}}}
+      onDisconnected={()=>recoverConnection('Call disconnected. Trying to restore the media connection. If retries fail, check LiveKit ICE/TURN reachability.')}
       onError={(e)=>{
-        setConnection(null);
         const raw=String(e?.message||'Connection failed');
-        const iceFailed=/pc connection|peer connection|ice|candidate|connectivity/i.test(raw);
-        setError(iceFailed
-          ? 'Media connection failed (WebRTC/ICE). The meeting website loaded, but this network cannot reach the LiveKit media server. External devices need reachable TCP 7881, UDP 7882, UDP 3478 or a working TURN relay. Details: '+raw
-          : 'Unable to connect to the meeting server: '+raw);
+        const iceFailed=/pc connection|peer connection|ice|candidate|connectivity|transport/i.test(raw);
+        if(iceFailed){
+          recoverConnection('Media connection failed (WebRTC/ICE). Nexus is attempting to reconnect. If your work firewall blocks direct UDP/TCP media, a reachable TURN/TLS relay is required. Details: '+raw);
+        }else{
+          setReconnecting(false);setConnection(null);
+          setError('Unable to connect to the meeting server: '+raw);
+        }
       }}
       style={{height:'100%'}}>
       <ConferenceStage roomId={roomId} onEnd={leave}/>
@@ -94,7 +122,8 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   </div>;
   return <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-5">
     <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl p-8 space-y-5">
-      <h1 className="text-2xl font-bold">NovaNexus Video Meeting</h1>
+      <h1 className="text-2xl font-bold">Nexus Workspace Video Meeting</h1>
+      {reconnecting&&<div role="status" className="rounded-lg bg-indigo-900/60 p-3 text-sm font-medium text-indigo-100">Reconnecting to your meeting automatically… attempt {retryAttemptsRef.current} of 2.</div>}
       <div className="text-slate-300">Room: <strong>{roomId}</strong></div>
       <div className="text-slate-300">Signed in as {user?.name||'Member'}</div><button className="rounded-lg border border-slate-500 px-4 py-2 text-sm" onClick={()=>setShowSettings(true)}>Video &amp; Audio Settings</button>
       <label className="grid gap-2 text-sm">Share meeting link<input aria-label="Meeting invitation link" readOnly className="w-full min-w-0 rounded-lg border border-slate-600 bg-white p-3 text-sm font-semibold text-slate-900" value={shareUrl}/></label><button type="button" onClick={copyInvite} className="rounded-lg border border-slate-500 px-4 py-2 text-sm">Copy meeting link</button>{copyFeedback&&<p role="status" className="text-sm text-slate-300">{copyFeedback}</p>}
