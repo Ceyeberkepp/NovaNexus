@@ -20,7 +20,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const retryAttemptsRef=useRef(0);
   const activeRoomRef=useRef(true);
   const [reconnecting,setReconnecting]=useState(false);
-  useEffect(()=>()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current)},[]);
+  useEffect(()=>{activeRoomRef.current=true;return ()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current)}},[]);
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
   const [meetingBaseURL,setMeetingBaseURL]=useState(window.location.origin);
   useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}const requested=String(data?.settings?.meeting_public_url||'');if(active&&requested.startsWith('https://'))setMeetingBaseURL(requested.replace(/\/$/ ,''));}).catch(()=>{});return ()=>{active=false;};},[]);
