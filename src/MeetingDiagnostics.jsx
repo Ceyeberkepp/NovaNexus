@@ -63,13 +63,12 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
      <div className="nexus-drawer-head"><h2>Call health</h2><button type="button" onClick={onClose} aria-label="Close media diagnostics">✕</button></div>
      <div className="space-y-4 overflow-y-auto p-4 text-xs">
        <p>Connection: <strong>{snapshot.connectionState}</strong>. {snapshot.remoteCount} remote participant(s).</p>
-       {snapshot.participants.map((p,i)=><div key={i} className="rounded-xl border border-zinc-700 p-3">
+       {snapshot.participants.map((p,i)=><div key={p.participantKey||i} className="rounded-xl border border-zinc-700 p-3">
          <div className="mb-1 font-semibold">{p.name} {p.isLocal?'(you)':''}</div>
          <p>{explainCameraState(p.cameraState)}</p>
          {!p.isLocal&&p.cameraPublished&&<p>Remote camera subscribed: {p.cameraSubscribed?'Yes':'Not yet'}</p>}
          {(()=>{
-           const participant=p.isLocal?room.localParticipant:Array.from(room.remoteParticipants.values()).find(x=>(x.name||x.identity)===p.name);
-           const video=participant&&videoStats[participant.sid||participant.identity];
+           const video=videoStats[p.participantKey];
            if(!video)return <p className="mt-1 text-zinc-500">RTP video statistics are not available yet.</p>;
            return <div className="mt-2 text-zinc-300">
              <p>{p.isLocal?'Outgoing':'Incoming'} packets: {video.packets}; video frames {p.isLocal?'encoded':'decoded'}: {video.frames}</p>
