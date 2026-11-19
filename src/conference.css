@@ -30,3 +30,7 @@
 .nexus-real-chat .lk-chat{height:100%;background:#1b1b1f;color:#fff}
 .nexus-real-chat .lk-chat-messages{color:#fff}
 @media(max-width:800px){.nexus-video-area{padding:12px 12px 98px}.nexus-video-area.nexus-with-drawer{right:0;display:none}.nexus-meeting-drawer{width:100%}.nexus-float-toolbar{gap:3px;padding:9px 10px;bottom:18px;max-width:calc(100vw - 20px)}.nexus-conference-stage .nexus-meeting-control{width:39px!important;height:39px!important;min-width:39px!important}.nexus-end-call{height:39px;padding:0 12px}.nexus-stage-count{display:none}}
+
+.nexus-media-warning{position:absolute;z-index:12;top:65px;left:20px;max-width:min(550px,calc(100vw - 40px));border:1px solid #a16207;border-radius:10px;background:rgba(69,39,15,.95);padding:10px 14px;color:#fef3c7;font-size:12px;pointer-events:none}
+.nexus-media-diagnostics{position:absolute;z-index:75;right:15px;top:65px;bottom:95px;width:min(370px,calc(100vw - 30px));display:flex;flex-direction:column;overflow:hidden;border:1px solid #52525b;border-radius:15px;background:rgba(24,24,27,.98);box-shadow:0 22px 60px rgba(0,0,0,.55);color:white}
+@media(max-width:800px){.nexus-media-warning{top:68px;left:10px}.nexus-media-diagnostics{top:75px;bottom:82px;right:8px}.nexus-float-toolbar{overflow-x:auto}}

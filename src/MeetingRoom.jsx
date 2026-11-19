@@ -17,10 +17,13 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const switchingRef=useRef(false);
   const autostartedRef=useRef(false);
   const retryTimerRef=useRef(null);
+  const stableTimerRef=useRef(null);
   const retryAttemptsRef=useRef(0);
   const activeRoomRef=useRef(true);
+  const connectedRef=useRef(false);
+  const recoveryPendingRef=useRef(false);
   const [reconnecting,setReconnecting]=useState(false);
-  useEffect(()=>{activeRoomRef.current=true;return ()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current)}},[]);
+  useEffect(()=>{activeRoomRef.current=true;return ()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current);if(stableTimerRef.current)clearTimeout(stableTimerRef.current)}},[]);
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
   const [meetingBaseURL,setMeetingBaseURL]=useState(window.location.origin);
   useEffect(()=>{let active=true;fetch('/api/workspace/settings',{credentials:'same-origin'}).then(r=>r.json()).then(data=>{const max=Number(data?.settings?.default_meeting_limit);if(active&&Number.isInteger(max)&&max>=1&&max<=1000){setMaxParticipants(max);setWorkspaceLimit(max);}const requested=String(data?.settings?.meeting_public_url||'');if(active&&requested.startsWith('https://'))setMeetingBaseURL(requested.replace(/\/$/ ,''));}).catch(()=>{});return ()=>{active=false;};},[]);
@@ -66,18 +69,25 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const leave=()=>{
     activeRoomRef.current=false;
     if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
+    if(stableTimerRef.current){clearTimeout(stableTimerRef.current);stableTimerRef.current=null;}
+    recoveryPendingRef.current=false;
     setEnded(true);onEnd();
   };
   function recoverConnection(message){
     if(!activeRoomRef.current||switchingRef.current)return;
+    if(recoveryPendingRef.current)return;
+    recoveryPendingRef.current=true;
+    if(stableTimerRef.current){clearTimeout(stableTimerRef.current);stableTimerRef.current=null;}
+    connectedRef.current=false;
     setConnection(null);
     setError(message);
-    if(retryTimerRef.current||retryAttemptsRef.current>=2){setReconnecting(false);return;}
+    if(retryTimerRef.current||retryAttemptsRef.current>=2){recoveryPendingRef.current=false;setReconnecting(false);return;}
     retryAttemptsRef.current+=1;
     const attempt=retryAttemptsRef.current;
     setReconnecting(true);
     retryTimerRef.current=window.setTimeout(async()=>{
       retryTimerRef.current=null;
+      recoveryPendingRef.current=false;
       if(!activeRoomRef.current)return;
       // Fetch a fresh room token; never reuse the previous failed WebRTC
       // connection or interrupt LiveKit's built-in transient reconnection.
@@ -102,16 +112,34 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       connect={true}
       audio={audioOnly?true:(prefs.callMicEnabled===false?false:{echoCancellation:prefs.callEchoCancellation!==false,noiseSuppression:prefs.callNoiseSuppression!==false,...(prefs.callAudioDevice?{deviceId:prefs.callAudioDevice}:{})})}
       video={audioOnly?false:prefs.callCamEnabled===false?false:{resolution:({ '360p':{width:640,height:360}, '720p':{width:1280,height:720}, '1080p':{width:1920,height:1080}}[prefs.callQuality]||{width:1280,height:720}),...(prefs.callVideoDevice?{deviceId:prefs.callVideoDevice}:{})}}
-      onDisconnected={()=>recoverConnection('Call disconnected. Trying to restore the media connection. If retries fail, check LiveKit ICE/TURN reachability.')}
-      onError={(e)=>{
-        const raw=String(e?.message||'Connection failed');
-        const iceFailed=/pc connection|peer connection|ice|candidate|connectivity|transport/i.test(raw);
-        if(iceFailed){
-          recoverConnection('Media connection failed (WebRTC/ICE). Nexus is attempting to reconnect. If your work firewall blocks direct UDP/TCP media, a reachable TURN/TLS relay is required. Details: '+raw);
-        }else{
-          setReconnecting(false);setConnection(null);
-          setError('Unable to connect to the meeting server: '+raw);
+      onConnected={()=>{
+        connectedRef.current=true;
+        recoveryPendingRef.current=false;
+        // A short-lived ICE connection is not proof of stability. Do not
+        // reset the retry budget until the call stays up for 30 seconds.
+        if(stableTimerRef.current)clearTimeout(stableTimerRef.current);
+        stableTimerRef.current=window.setTimeout(()=>{
+          if(activeRoomRef.current&&connectedRef.current)retryAttemptsRef.current=0;
+          stableTimerRef.current=null;
+        },30000);
+        if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
+        setReconnecting(false);
+        setError('');
+      }}
+      onDisconnected={()=>recoverConnection('Media session disconnected. Nexus is attempting to rejoin. Check Call health for remote track status.')}
+      onError={e=>{
+        const raw=String(e?.message||'Connection failed').slice(0,300);
+        // LiveKit can report a transient media/device failure while its own
+        // ICE reconnection logic is still running. Do not unmount the room
+        // and interrupt a working camera/subscription in that case.
+        if(connectedRef.current){
+          setError('Media warning: '+raw+'. Reconnection is handled by LiveKit while the call remains open.');
+          return;
         }
+        const iceFailed=/pc connection|peer connection|ice|candidate|connectivity|transport/i.test(raw);
+        recoverConnection(iceFailed
+          ? 'Media connection could not be established. Retrying with a new token; inspect Call health and ICE routes. '+raw
+          : 'Could not start the call. Trying again: '+raw);
       }}
       style={{height:'100%'}}>
       <ConferenceStage roomId={roomId} onEnd={leave}/>
