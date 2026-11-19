@@ -19,6 +19,8 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const retryTimerRef=useRef(null);
   const retryAttemptsRef=useRef(0);
   const activeRoomRef=useRef(true);
+  const connectedRef=useRef(false);
+  const recoveryPendingRef=useRef(false);
   const [reconnecting,setReconnecting]=useState(false);
   useEffect(()=>{activeRoomRef.current=true;return ()=>{activeRoomRef.current=false;if(retryTimerRef.current)clearTimeout(retryTimerRef.current)}},[]);
   const [workspaceLimit,setWorkspaceLimit] = useState(1000);
@@ -66,18 +68,23 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const leave=()=>{
     activeRoomRef.current=false;
     if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
+    recoveryPendingRef.current=false;
     setEnded(true);onEnd();
   };
   function recoverConnection(message){
     if(!activeRoomRef.current||switchingRef.current)return;
+    if(recoveryPendingRef.current)return;
+    recoveryPendingRef.current=true;
+    connectedRef.current=false;
     setConnection(null);
     setError(message);
-    if(retryTimerRef.current||retryAttemptsRef.current>=2){setReconnecting(false);return;}
+    if(retryTimerRef.current||retryAttemptsRef.current>=2){recoveryPendingRef.current=false;setReconnecting(false);return;}
     retryAttemptsRef.current+=1;
     const attempt=retryAttemptsRef.current;
     setReconnecting(true);
     retryTimerRef.current=window.setTimeout(async()=>{
       retryTimerRef.current=null;
+      recoveryPendingRef.current=false;
       if(!activeRoomRef.current)return;
       // Fetch a fresh room token; never reuse the previous failed WebRTC
       // connection or interrupt LiveKit's built-in transient reconnection.
@@ -102,16 +109,28 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       connect={true}
       audio={audioOnly?true:(prefs.callMicEnabled===false?false:{echoCancellation:prefs.callEchoCancellation!==false,noiseSuppression:prefs.callNoiseSuppression!==false,...(prefs.callAudioDevice?{deviceId:prefs.callAudioDevice}:{})})}
       video={audioOnly?false:prefs.callCamEnabled===false?false:{resolution:({ '360p':{width:640,height:360}, '720p':{width:1280,height:720}, '1080p':{width:1920,height:1080}}[prefs.callQuality]||{width:1280,height:720}),...(prefs.callVideoDevice?{deviceId:prefs.callVideoDevice}:{})}}
-      onDisconnected={()=>recoverConnection('Call disconnected. Trying to restore the media connection. If retries fail, check LiveKit ICE/TURN reachability.')}
-      onError={(e)=>{
-        const raw=String(e?.message||'Connection failed');
-        const iceFailed=/pc connection|peer connection|ice|candidate|connectivity|transport/i.test(raw);
-        if(iceFailed){
-          recoverConnection('Media connection failed (WebRTC/ICE). Nexus is attempting to reconnect. If your work firewall blocks direct UDP/TCP media, a reachable TURN/TLS relay is required. Details: '+raw);
-        }else{
-          setReconnecting(false);setConnection(null);
-          setError('Unable to connect to the meeting server: '+raw);
+      onConnected={()=>{
+        connectedRef.current=true;
+        recoveryPendingRef.current=false;
+        retryAttemptsRef.current=0;
+        if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
+        setReconnecting(false);
+        setError('');
+      }}
+      onDisconnected={()=>recoverConnection('Media session disconnected. Nexus is attempting to rejoin. Check Call health for remote track status.')}
+      onError={e=>{
+        const raw=String(e?.message||'Connection failed').slice(0,300);
+        // LiveKit can report a transient media/device failure while its own
+        // ICE reconnection logic is still running. Do not unmount the room
+        // and interrupt a working camera/subscription in that case.
+        if(connectedRef.current){
+          setError('Media warning: '+raw+'. Reconnection is handled by LiveKit while the call remains open.');
+          return;
         }
+        const iceFailed=/pc connection|peer connection|ice|candidate|connectivity|transport/i.test(raw);
+        recoverConnection(iceFailed
+          ? 'Media connection could not be established. Retrying with a new token; inspect Call health and ICE routes. '+raw
+          : 'Could not start the call. Trying again: '+raw);
       }}
       style={{height:'100%'}}>
       <ConferenceStage roomId={roomId} onEnd={leave}/>
