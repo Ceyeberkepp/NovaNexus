@@ -42,3 +42,18 @@ export function summarizeRoom(room){
     remoteCount:remote.length
   };
 }
+
+export function summarizeVideoRtpStats(report,isLocal=false) {
+ if(!report||typeof report.forEach!=='function')return null;
+ const direction=isLocal?'outbound-rtp':'inbound-rtp';
+ let packets=0,bytes=0,frames=0,streams=0;
+ report.forEach(stat=>{
+  if(stat.type!==direction || !(['video',undefined].includes(stat.kind) && (stat.kind==='video'||stat.mediaType==='video')))return;
+  if(stat.isRemote) return;
+  streams++;
+  packets+=Math.max(0,Number(isLocal?stat.packetsSent:stat.packetsReceived)||0);
+  bytes+=Math.max(0,Number(isLocal?stat.bytesSent:stat.bytesReceived)||0);
+  frames+=Math.max(0,Number(isLocal?stat.framesEncoded:stat.framesDecoded)||0);
+ });
+ return streams?{direction:isLocal?'outgoing':'incoming',streams,packets,bytes,frames}:null;
+}
