@@ -47,6 +47,8 @@ jobs:
           npm run check
       - name: Verify local and Cloudflare call signaling origins
         run: node --test tests/meeting-origin.test.mjs
+      - name: Test meeting camera publication and remote subscription diagnostics
+        run: node --test tests/meeting-diagnostics.test.mjs
       - name: Verify Go backend
         run: |
           go mod tidy
