@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {Camera,Mic,Monitor,Sliders,Shield,RefreshCw} from 'lucide-react';
 import {readChatPreferences} from './ChatPreferences';
+import {BACKGROUND_SCENES,applyVideoBackground} from './video-backgrounds';
 
 const input='w-full rounded-xl bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-white';
 export default function VideoSettings({userId,settings,onSave,onClose,room}){
@@ -14,9 +15,13 @@ export default function VideoSettings({userId,settings,onSave,onClose,room}){
  useEffect(()=>{let live=true;navigator.mediaDevices?.enumerateDevices?.().then(d=>{if(live)setDevices(d)}).catch(()=>{});return()=>{live=false;streamRef.current?.getTracks().forEach(t=>t.stop())};},[]);
  useEffect(()=>{if(videoRef.current)videoRef.current.srcObject=preview;},[preview]);
  function update(key,value){setForm(p=>({...p,[key]:value}));}
- function save(){
+ async function save(){
   try{
    const revised={...readChatPreferences(userId),...form};
+   if(room){
+     // Apply to the actual published camera stream before reporting success.
+     await applyVideoBackground(room,revised);
+   }
    localStorage.setItem('novanexus.chat.'+userId,JSON.stringify(revised));
    onSave(revised);onClose();
   }catch(e){setNotice('Browser storage is unavailable: '+e.message)}
@@ -50,9 +55,21 @@ export default function VideoSettings({userId,settings,onSave,onClose,room}){
     <div className="flex-1 overflow-y-auto p-6 md:p-9 space-y-5">
      {tab==='devices'&&<><h3 className="font-bold">Camera and audio devices</h3><p className="text-xs text-zinc-400">Select devices before joining or switch active devices while connected. Browser permission may be required.</p>{deviceSelect('videoinput','Camera')}{deviceSelect('audioinput','Microphone')}{deviceSelect('audiooutput','Speakers / Output Device')}<button onClick={cameraTest} className="rounded-lg border border-indigo-500 px-4 py-2 text-xs font-bold text-indigo-200">Test Camera</button>{preview&&<video ref={videoRef} autoPlay playsInline muted className="mt-3 max-h-48 w-full rounded-xl bg-black object-contain"/>}</>}
      {tab==='audio'&&<>{switchable('callMicEnabled','Microphone on when joining','Your personal default; you can mute in the meeting.')}{switchable('callNoiseSuppression','Noise suppression','Browser audio processing; applies to new capture.')}{switchable('callEchoCancellation','Echo cancellation','Browser audio processing; applies to new capture.')}<p className="text-xs text-zinc-400">The microphone picker is in Devices. In-call mute controls are always available in the toolbar.</p></>}
-     {tab==='video'&&<>{switchable('callCamEnabled','Camera on when joining','Your default camera state at the start of a call.')}<label className="block text-sm">Preferred camera resolution<select className={input+' mt-2'} value={form.callQuality||'720p'} onChange={e=>update('callQuality',e.target.value)}><option value="360p">360p – low bandwidth</option><option value="720p">720p – HD</option><option value="1080p">1080p – Full HD</option></select></label><p className="text-xs text-zinc-400">Resolution applies to the next camera capture. LiveKit automatically adapts published video quality to network conditions.</p>{switchable('callMirror','Mirror local preview','Affects your own video preview only; remote participants see the normal feed.')}</>}
+     {tab==='video'&&<>{switchable('callCamEnabled','Camera on when joining','Your default camera state at the start of a call.')}<label className="block text-sm">Preferred camera resolution<select className={input+' mt-2'} value={form.callQuality||'720p'} onChange={e=>update('callQuality',e.target.value)}><option value="360p">360p – low bandwidth</option><option value="720p">720p – HD</option><option value="1080p">1080p – Full HD</option></select></label><p className="text-xs text-zinc-400">Resolution applies to the next camera capture. LiveKit automatically adapts published video quality to network conditions.</p>
+       <section aria-label="Video background effects" className="space-y-3">
+         <h3 className="font-bold">Background effects</h3>
+         <p className="text-xs text-zinc-400">Blur the surroundings or replace them with a built-in background. Applied to the outgoing camera video, not just the preview.</p>
+         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+           {BACKGROUND_SCENES.map(scene=><button type="button" key={scene.id} aria-pressed={(form.callBackgroundMode||'none')===scene.id}
+             onClick={()=>update('callBackgroundMode',scene.id)}
+             className={'overflow-hidden rounded-xl border-2 p-1 text-left text-xs '+((form.callBackgroundMode||'none')===scene.id?'border-violet-400 bg-violet-900/40':'border-zinc-700 hover:border-zinc-500')}>
+             {scene.image?<img src={scene.image} alt="" className="mb-2 aspect-video w-full rounded-lg object-cover"/>:<div className={'mb-2 flex aspect-video w-full items-center justify-center rounded-lg text-sm '+(scene.id==='blur'?'bg-zinc-600/40 backdrop-blur-xl':'bg-zinc-700')}>{scene.id==='blur'?'Blur':'No effect'}</div>}
+             <span className="block p-1 font-semibold">{scene.label}</span>
+           </button>)}
+         </div>
+       </section>{switchable('callMirror','Mirror local preview','Affects your own video preview only; remote participants see the normal feed.')}</>}
      {tab==='recording'&&<><h3 className="font-bold">Meeting recording</h3><p className="text-sm text-zinc-300">Server-side recording and transcription require an egress service and retention policy; not enabled yet.</p><p className="text-xs text-zinc-500">You can use your browser or operating system screen recorder independently, but it is not managed by NovaNexus. No fake recording switch is displayed.</p></>}
-     {tab==='advanced'&&<><h3 className="font-bold">Advanced conference controls</h3><div className="space-y-4 text-sm">{['Grid and speaker layouts: available in the LiveKit conference controls','In-room chat and participant list: available in the conference toolbar','Screen sharing: available through the conference toolbar','Breakout rooms: requires host orchestration; not enabled','Remote control: requires permission protocol; not enabled','Guest waiting room and approval: not enabled','Background blur and virtual backgrounds: need a media effects processor'].map(x=><div key={x} className="rounded-xl border border-zinc-700 p-4">{x}</div>)}</div></>}
+     {tab==='advanced'&&<><h3 className="font-bold">Advanced conference controls</h3><div className="space-y-4 text-sm">{['Grid and speaker layouts: available in the LiveKit conference controls','In-room chat and participant list: available in the conference toolbar','Screen sharing: available through the conference toolbar','Breakout rooms: requires host orchestration; not enabled','Remote control: requires permission protocol; not enabled','Guest waiting room and approval: not enabled','Background blur and virtual backgrounds: configure in Video settings'].map(x=><div key={x} className="rounded-xl border border-zinc-700 p-4">{x}</div>)}</div></>}
      {notice&&<p role="status" className="rounded-lg bg-amber-900/30 p-3 text-xs text-amber-200">{notice}</p>}
     </div>
     <footer className="flex justify-end gap-3 border-t border-zinc-700 p-5"><button className="rounded-xl px-5 py-2 text-sm hover:bg-zinc-800" onClick={onClose}>Cancel</button><button onClick={save} className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-bold">Save Settings</button></footer>
