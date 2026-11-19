@@ -15,6 +15,7 @@ export function summarizeParticipant(participant, cameraSource='camera') {
   else cameraState='video-active';
   return {
     name:String(participant?.name||participant?.identity||'Participant').slice(0,80),
+    participantKey:String(participant?.sid||participant?.identity||''),
     isLocal,
     cameraState,
     cameraPublished:!!camera,
