@@ -1,7 +1,8 @@
 import React,{useEffect,useState} from 'react';
 import {GridLayout,ParticipantTile,RoomAudioRenderer,TrackToggle,useTracks,useParticipants,useRoomContext,Chat} from '@livekit/components-react';
 import {Track} from 'livekit-client';
-import {Mic,Video,MonitorUp,MessageCircle,Users,MoreVertical,PhoneOff,Disc,X,Grid2X2} from 'lucide-react';
+import {Mic,Video,MonitorUp,MessageCircle,Users,MoreVertical,PhoneOff,Disc,X,Grid2X2,Activity} from 'lucide-react';
+import MeetingDiagnostics from './MeetingDiagnostics';
 import './conference.css';
 
 // All participant tiles come from authenticated LiveKit tracks, never demo state.
@@ -11,6 +12,7 @@ export default function ConferenceStage({roomId,onEnd}){
  const participants=useParticipants();
  const [drawer,setDrawer]=useState('');
  const [layout,setLayout]=useState('grid');
+ const [showDiagnostics,setShowDiagnostics]=useState(false);
  const label=roomId||'Meeting';
  const leave=async()=>{try{await room.disconnect()}finally{onEnd?.()}};
  return <div className="nexus-conference-stage" data-lk-theme="default">
@@ -23,11 +25,13 @@ export default function ConferenceStage({roomId,onEnd}){
      <div className="nexus-drawer-head"><h2>{drawer==='chat'?'Meeting Chat':'Participants'}</h2><button aria-label="Close meeting panel" onClick={()=>setDrawer('')}><X size={18}/></button></div>
      {drawer==='chat'?<div className="nexus-real-chat"><Chat/></div>:<div className="nexus-real-roster">{participants.map(p=><div key={p.sid||p.identity} className="nexus-roster-person"><span className="nexus-roster-avatar">{String(p.name||p.identity||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase()}</span><div><strong>{p.name||p.identity||'Member'}</strong><p>{p.isLocal?'You':'Connected'}</p></div></div>)}</div>}
    </aside>}
+   <MeetingDiagnostics room={room} expanded={showDiagnostics} onClose={()=>setShowDiagnostics(false)}/>
    <footer className="nexus-float-toolbar" role="toolbar" aria-label="Meeting controls">
      <TrackToggle source={Track.Source.Microphone} showIcon={true} aria-label="Toggle microphone" className="nexus-meeting-control"/>
      <TrackToggle source={Track.Source.Camera} showIcon={true} aria-label="Toggle camera" className="nexus-meeting-control"/>
      <TrackToggle source={Track.Source.ScreenShare} showIcon={true} aria-label="Share screen" className="nexus-meeting-control"/>
      <button aria-label="Change video layout" title="Toggle speaker or grid layout" className="nexus-meeting-control" onClick={()=>setLayout(s=>s==='grid'?'speaker':'grid')}><Grid2X2 size={18}/></button>
+     <button aria-label="Call health and media diagnostics" title="Call health" aria-pressed={showDiagnostics} className={"nexus-meeting-control "+(showDiagnostics?"nexus-active":"")} onClick={()=>setShowDiagnostics(v=>!v)}><Activity size={18}/></button>
      <span className="nexus-control-divider"/>
      <button aria-label="Meeting chat" aria-pressed={drawer==='chat'} className={'nexus-meeting-control '+(drawer==='chat'?'nexus-active':'')} onClick={()=>setDrawer(d=>d==='chat'?'':'chat')}><MessageCircle size={19}/></button>
      <button aria-label="Participants" aria-pressed={drawer==='people'} className={'nexus-meeting-control '+(drawer==='people'?'nexus-active':'')} onClick={()=>setDrawer(d=>d==='people'?'':'people')}><Users size={19}/></button>
