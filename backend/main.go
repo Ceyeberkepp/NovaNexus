@@ -199,6 +199,9 @@ func (s *Server) api(w http.ResponseWriter,r *http.Request) {
  case "/api/messages":s.messagesAPI(w,r)
  case "/api/messages/attachment":s.messageAttachmentAPI(w,r)
  case "/api/calendar":s.calendarAPI(w,r)
+ case "/api/admin/security/saml":s.samlConfigurationAPI(w,r)
+ case "/api/auth/saml/status":s.samlStatusAPI(w,r)
+ case "/api/auth/saml/start":s.samlStartAPI(w,r)
  case "/api/auth/mfa":s.mfaAPI(w,r)
  case "/api/auth/login":if r.Method=="POST"{s.login(w,r)}else{fail(w,405,"Method not allowed")}
  case "/api/auth/me":if r.Method=="GET"{s.me(w,r)}else{fail(w,405,"Method not allowed")}
