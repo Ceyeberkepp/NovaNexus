@@ -1,19 +1,29 @@
 import React,{useEffect,useState} from 'react';
 import {GridLayout,ParticipantTile,RoomAudioRenderer,TrackToggle,useTracks,useParticipants,useRoomContext,Chat} from '@livekit/components-react';
-import {Track} from 'livekit-client';
+import {Track,RoomEvent} from 'livekit-client';
+import {applyVideoBackground} from './video-backgrounds';
 import {Mic,Video,MonitorUp,MessageCircle,Users,MoreVertical,PhoneOff,Disc,X,Grid2X2} from 'lucide-react';
 import './conference.css';
 
 // All participant tiles come from authenticated LiveKit tracks, never demo state.
-export default function ConferenceStage({roomId,onEnd}){
+export default function ConferenceStage({roomId,onEnd,videoPreferences={}}){
  const room=useRoomContext();
  const tracks=useTracks([{source:Track.Source.Camera,withPlaceholder:true},{source:Track.Source.ScreenShare,withPlaceholder:false}]);
  const participants=useParticipants();
  const [drawer,setDrawer]=useState('');
  const [layout,setLayout]=useState('grid');
+ const [backgroundError,setBackgroundError]=useState('');
+ useEffect(()=>{
+   let active=true;
+   const apply=()=>applyVideoBackground(room,videoPreferences).then(()=>{if(active)setBackgroundError('')}).catch(e=>{if(active)setBackgroundError(e?.message||'Background effect unavailable')});
+   apply();
+   room.on(RoomEvent.LocalTrackPublished,apply);
+   return ()=>{active=false;room.off(RoomEvent.LocalTrackPublished,apply)};
+ },[room,videoPreferences]);
  const label=roomId||'Meeting';
  const leave=async()=>{try{await room.disconnect()}finally{onEnd?.()}};
  return <div className="nexus-conference-stage" data-lk-theme="default">
+   {backgroundError&&<div role="alert" className="absolute right-4 top-14 z-50 rounded-lg bg-amber-900/95 p-3 text-xs text-white">{backgroundError}</div>}
    <header className="nexus-video-label"><span className="nexus-live-dot"/> {label} <span className="nexus-stage-count">{participants.length} participant{participants.length===1?'':'s'}</span></header>
    <div className={'nexus-video-area '+(drawer?'nexus-with-drawer':'')}>
      <GridLayout tracks={tracks} className={'nexus-video-grid '+(layout==='speaker'?'nexus-speaker-mode':'')}><ParticipantTile/></GridLayout>
