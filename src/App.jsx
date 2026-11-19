@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MeetingRoom from './MeetingRoom';
+import WorkspaceApps,{NEXUS_APPS,loadPinnedApps,persistPinnedApps} from './WorkspaceApps';
 import {liveKitSignalingOrigin} from './meeting-origin.mjs';
 import CallNotifications from './CallNotifications';
 import CallsPanel from './CallsPanel';
@@ -1867,6 +1868,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('auth'); 
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [pinnedApps,setPinnedApps]=useState(loadPinnedApps);
+  const togglePinnedApp=(id)=>setPinnedApps(prev=>{const updated=prev.includes(id)?prev.filter(x=>x!==id):[...prev,id].slice(0,8);persistPinnedApps(updated);return updated;});
   const [adminInitialTab,setAdminInitialTab] = useState('users');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [meetingRoom, setMeetingRoom] = useState(()=>/^\/[0-9]{8}\/?$/.test(window.location.pathname)?window.location.pathname.replaceAll('/',''):'');
@@ -2034,6 +2037,13 @@ function App() {
                 <NavItem icon={<Phone />} label="Calls" active={currentTab === 'calls'} onClick={() => setCurrentTab('calls')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Calendar />} label="Schedule" active={currentTab === 'schedule'} onClick={() => setCurrentTab('schedule')} collapsed={sidebarCollapsed} />
                 <NavItem icon={<Sparkles />} label="AI Assistant" active={currentTab === 'ai'} onClick={() => setCurrentTab('ai')} collapsed={sidebarCollapsed} />
+                <NavItem icon={<LayoutGrid />} label="Apps" active={currentTab === 'apps'} onClick={() => setCurrentTab('apps')} collapsed={sidebarCollapsed} />
+                {pinnedApps.filter(id=>!['chats','calls','schedule','ai','admin'].includes(id)).map(id=>{
+                  const app=NEXUS_APPS.find(a=>a.id===id);
+                  if(!app||app.adminOnly&&user?.role!=='Admin')return null;
+                  const Icon=app.icon;
+                  return <NavItem key={id} icon={<Icon/>} label={app.name} active={currentTab===id} onClick={()=>setCurrentTab(id)} collapsed={sidebarCollapsed}/>;
+                })}
                 {user?.role === 'Admin' && <NavItem icon={<Shield />} label="Admin" active={currentTab === 'admin'} onClick={() => setCurrentTab('admin')} collapsed={sidebarCollapsed} />}
               </nav>
             </div>
@@ -2169,6 +2179,7 @@ function App() {
                 {currentTab === 'security' && <AccountSecurity user={user} />}
                 {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
                 {currentTab === 'ai' && <WorkspaceAssistant />}
+                {currentTab === 'apps' && <WorkspaceApps role={user?.role} onOpen={setCurrentTab} pinned={pinnedApps} onPin={togglePinnedApp}/>}
                 {currentTab === 'admin' && (user?.role === 'Admin' ? <AdminConsole users={users} setUsers={setUsers} initialTab={adminInitialTab} user={user} /> : <p className="p-12" role="alert">Administrator access required.</p>)}
             </div>
           </main>
