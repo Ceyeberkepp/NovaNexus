@@ -189,17 +189,35 @@ const AuthScreen = ({ setUser, setView, prefilledRoom, onGuestJoin }) => {
                 </div>
             )}
             </form>
-            {activeTab === 'login' && (
-                <div className="mt-8 pt-6 border-t border-slate-100">
-                    <button disabled title="Google SSO has not been configured" className="w-full bg-white border border-slate-200 text-slate-400 py-3.5 rounded-xl font-bold cursor-not-allowed text-sm flex items-center justify-center gap-3">
-                        <span className="w-5 h-5 flex items-center justify-center bg-white rounded-full"><GlobeIcon size={16} className="text-indigo-600"/></span> Google SSO Not Configured
-                    </button>
-                </div>
-            )}
+            {activeTab === 'login' && <SSOLoginEntry/>}
         </div>
       </div>
     </div>
   );
+};
+
+// Show the actual backend capability; a saved IdP configuration alone is not
+// a secure SAML login. Keep password/MFA available until the SP is operational.
+const SSOLoginEntry=()=>{
+  const [state,setState]=useState({enabled:false,loading:true});
+  useEffect(()=>{
+    let active=true;
+    fetch('/api/auth/saml/status',{credentials:'same-origin'})
+      .then(async response=>{if(!response.ok)throw Error('Unavailable');return response.json()})
+      .then(data=>{if(active)setState({enabled:data.enabled===true,loading:false})})
+      .catch(()=>{if(active)setState({enabled:false,loading:false})});
+    return()=>{active=false};
+  },[]);
+  return <div className="mt-8 border-t border-slate-100 pt-6">
+    <button type="button" disabled={!state.enabled}
+      onClick={()=>{if(state.enabled)window.location.assign('/api/auth/saml/start')}}
+      className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-3.5 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400">
+      <GlobeIcon size={18} className="text-indigo-600"/> Sign in with SAML SSO
+    </button>
+    {!state.enabled&&<p className="mt-2 text-center text-xs text-slate-500" role="status">
+      {state.loading?'Checking organization SSO…':'Organization SSO is not active. Sign in with your password and MFA.'}
+    </p>}
+  </div>;
 };
 
 // --- MEETING DETAILS MODAL ---
