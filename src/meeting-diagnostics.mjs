@@ -100,6 +100,10 @@ export function advanceRemoteVideoHealth(previous,stats,active=true) {
  const packets=Math.max(0,stats.packets);
  if(!previous||previous.lastFrames===null||previous.lastPackets===null)
   return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'warming-up'};
+ // A replaced/renegotiated track can reset RTP counters; treat it as a new
+ // baseline rather than incorrectly reporting a persistent black tile.
+ if(frames<previous.lastFrames||packets<previous.lastPackets)
+  return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'warming-up'};
  if(frames>previous.lastFrames)
   return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'receiving'};
  const stalledSamples=(previous.stalledSamples||0)+1;
