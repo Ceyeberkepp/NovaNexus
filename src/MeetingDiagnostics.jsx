@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {RoomEvent,Track} from 'livekit-client';
-import {summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport,advanceRemoteVideoHealth} from './meeting-diagnostics.mjs';
+import {summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport,advanceRemoteVideoHealth,remoteVideoTrackChanged} from './meeting-diagnostics.mjs';
 
 const WATCHED=[
  RoomEvent.ParticipantConnected,RoomEvent.ParticipantDisconnected,
@@ -18,10 +18,24 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
  const healthRef=useRef({});
  const [icePath,setIcePath]=useState(null);
  const lastFrames=useRef({});
+ const previousTracks=useRef({});
  useEffect(()=>{
   let live=true;
   const sample=async()=>{
    const participants=[room.localParticipant,...Array.from(room.remoteParticipants.values())].filter(Boolean);
+   const currentTracks={};
+   for(const p of participants){
+     const key=p.sid||p.identity;
+     if(!key)continue;
+     const publication=Array.from(p.trackPublications.values()).find(pub=>pub.source===Track.Source.Camera);
+     const track=publication?.track||null;
+     currentTracks[key]=track;
+     if(Object.prototype.hasOwnProperty.call(previousTracks.current,key)&&remoteVideoTrackChanged(previousTracks.current[key],track)){
+       delete lastFrames.current[key];
+       delete healthRef.current[key];
+     }
+   }
+   previousTracks.current=currentTracks;
    const results=await Promise.all(participants.map(async p=>{
      const publication=Array.from(p.trackPublications.values()).find(pub=>pub.source===Track.Source.Camera);
      const track=publication?.track;
