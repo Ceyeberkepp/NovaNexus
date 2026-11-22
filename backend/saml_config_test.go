@@ -36,6 +36,23 @@ func TestSAMLProviderValidation(t *testing.T) {
  }
 }
 
+func TestSAMLRejectsExpiredFutureAndNonSigningCertificates(t *testing.T) {
+ now:=time.Now()
+ for _,tc:=range []struct{name string;before,after time.Time;usage x509.KeyUsage}{
+  {"expired",now.Add(-48*time.Hour),now.Add(-time.Hour),x509.KeyUsageDigitalSignature},
+  {"not yet valid",now.Add(time.Hour),now.Add(48*time.Hour),x509.KeyUsageDigitalSignature},
+  {"wrong key usage",now.Add(-time.Hour),now.Add(time.Hour),x509.KeyUsageKeyEncipherment},
+ }{
+  t.Run(tc.name,func(t *testing.T){
+   key,e:=rsa.GenerateKey(rand.Reader,2048);if e!=nil{t.Fatal(e)}
+   template:=&x509.Certificate{SerialNumber:big.NewInt(123),Subject:pkix.Name{CommonName:"IdP"},NotBefore:tc.before,NotAfter:tc.after,KeyUsage:tc.usage}
+   der,e:=x509.CreateCertificate(rand.Reader,template,template,&key.PublicKey,key);if e!=nil{t.Fatal(e)}
+   cert:=string(pem.EncodeToMemory(&pem.Block{Type:"CERTIFICATE",Bytes:der}))
+   if validSAMLProvider("https://idp.example.com","https://idp.example.com/saml",cert){t.Fatal("invalid signing certificate accepted")}
+  })
+ }
+}
+
 func TestSAMLSignInFailsClosed(t *testing.T) {
  s:=&Server{}
  req:=httptest.NewRequest(http.MethodGet,"/api/auth/saml/start",nil)
