@@ -112,3 +112,9 @@ export function advanceRemoteVideoHealth(previous,stats,active=true) {
   : 'warming-up';
  return {lastFrames:frames,lastPackets:packets,stalledSamples,status};
 }
+
+// A newly subscribed camera publication must start a new RTP baseline even
+// if its counters happen to match the old track. Do not retain stale stalls.
+export function remoteVideoTrackChanged(previousTrack,nextTrack) {
+ return previousTrack !== nextTrack;
+}
