@@ -194,5 +194,27 @@ jobs:
           set -euo pipefail
           base=http://127.0.0.1:3000
           curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"Hello AI"}]}' "$base/api/assistant/chat" | grep -q 'Nexus AI test response'
+      - name: Verify SAML setup authorization and fail-closed authentication
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:3000
+          # SAML is only configured, not an active login mechanism.
+          curl -fsS "$base/api/auth/saml/status" | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["enabled"] is False'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/auth/saml/start")" = "503"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/admin/security/saml")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-second-cookie "$base/api/admin/security/saml")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' -d '{"entityID":"https://example.test/idp","loginURL":"http://example.test/sso","certificate":"invalid"}' "$base/api/admin/security/saml")" = "400"
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 2 -subj "/CN=NovaNexus Test Identity Provider" -addext "keyUsage=critical,digitalSignature" -keyout /tmp/nova-idp-private.key -out /tmp/nova-idp-public.crt 2>/dev/null
+          python3 - <<'PY'
+          import json
+          cert=open('/tmp/nova-idp-public.crt').read()
+          with open('/tmp/nova-saml-config.json','w') as f:
+              json.dump({'entityID':'https://idp.example.test/saml','loginURL':'https://idp.example.test/sso','certificate':cert},f)
+          PY
+          curl -fsS -b /tmp/nova-cookie2 -X PUT -H 'Content-Type: application/json' --data-binary @/tmp/nova-saml-config.json "$base/api/admin/security/saml" | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["ok"] and s["enabled"] is False'
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/security/saml" | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["configuration"]["entityID"]=="https://idp.example.test/saml"; assert s["enabled"] is False'
+          curl -fsS "$base/api/auth/saml/status" | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["enabled"] is False and "certificate" not in s'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/auth/saml/start")" = "503"
+          rm -f /tmp/nova-idp-private.key /tmp/nova-idp-public.crt /tmp/nova-saml-config.json
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
