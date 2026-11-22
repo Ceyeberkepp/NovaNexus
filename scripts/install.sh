@@ -510,6 +510,17 @@ else
   log "WARNING: WebRTC is in LAN-only mode. External participants on 5G cannot reach a private ICE candidate even when the Cloudflare GUI loads."
   log "If using Cloudflare for external calls, rerun with NOVANEXUS_MEDIA_MODE=public after configuring WAN media forwarding or an external TURN relay."
 fi
+# The single installer also runs the bundled media preflight, so an
+# administrator does not need to separately install or invoke ICE/TURN tools.
+# External internet reachability still requires a remote-network test.
+log "Running integrated LiveKit/ICE/TURN deployment preflight"
+if [[ -r "$ROOT_DIR/scripts/check-media.sh" ]]; then
+  if ! NOVANEXUS_ROOT_DIR="$ROOT_DIR" bash "$ROOT_DIR/scripts/check-media.sh"; then
+    log "WARNING: Media preflight did not pass. The website may work, but external calls are not verified."
+  fi
+else
+  log "WARNING: Media preflight script unavailable; external calls are not verified."
+fi
 log "Run media checks: bash $ROOT_DIR/scripts/check-media.sh"
 
 if [[ "$TLS_MODE" == internal ]]; then
