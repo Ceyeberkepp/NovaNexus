@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {summarizeParticipant,summarizeRoom,explainCameraState,summarizeVideoRtpStats} from '../src/meeting-diagnostics.mjs';
+import {summarizeParticipant,summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport} from '../src/meeting-diagnostics.mjs';
 const mock=(pubs,isLocal=false)=>({name:isLocal?'Me':'Remote',isLocal,trackPublications:new Map(pubs)});
 test('distinguishes remote unpublished from subscription failure',()=>{
  const absent=summarizeParticipant(mock([]));
@@ -43,4 +43,25 @@ test('video without received RTP frames is still not confirmed viewable',()=>{
 test('outgoing RTP statistics use frames encoded and exclude non-video tracks',()=>{
  const stats=new Map([['v',{type:'outbound-rtp',kind:'video',packetsSent:40,bytesSent:80000,framesEncoded:35}],['audio',{type:'outbound-rtp',kind:'audio',packetsSent:1000}]]);
  assert.deepEqual(summarizeVideoRtpStats(stats,true),{direction:'outgoing',streams:1,packets:40,bytes:80000,frames:35});
+});
+
+test('ICE summary reports selected direct UDP route without candidate IPs',()=>{
+ const report=new Map([
+  ['transport',{id:'transport',type:'transport',selectedCandidatePairId:'pair'}],
+  ['pair',{id:'pair',type:'candidate-pair',state:'succeeded',localCandidateId:'local',remoteCandidateId:'remote'}],
+  ['local',{id:'local',type:'local-candidate',candidateType:'srflx',protocol:'udp',address:'203.0.113.99',port:9999}],
+  ['remote',{id:'remote',type:'remote-candidate',candidateType:'host',address:'10.1.2.3'}]
+ ]);
+ const summary=summarizeICETransport(report);
+ assert.deepEqual(summary,{state:'connected',candidateType:'srflx',protocol:'udp',relayed:false,remoteCandidateType:'host'});
+ assert.doesNotMatch(JSON.stringify(summary),/203\\.0\\.113|10\\.1\\.2|9999/);
+});
+test('ICE summary recognizes a TCP TURN relay and missing path',()=>{
+ const relay=new Map([
+  ['pair',{id:'pair',type:'candidate-pair',state:'succeeded',nominated:true,localCandidateId:'local'}],
+  ['local',{id:'local',type:'local-candidate',candidateType:'relay',protocol:'tcp'}]
+ ]);
+ assert.equal(summarizeICETransport(relay).relayed,true);
+ assert.equal(summarizeICETransport(new Map()).state,'no-selected-pair');
+ assert.equal(summarizeICETransport(null),null);
 });

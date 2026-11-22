@@ -58,3 +58,32 @@ export function summarizeVideoRtpStats(report,isLocal=false) {
  });
  return streams?{direction:isLocal?'outgoing':'incoming',streams,packets,bytes,frames}:null;
 }
+
+
+// Read only non-identifying ICE transport information. In particular, do not
+// report local/remote addresses, ports, SDP or network identifiers.
+export function summarizeICETransport(report) {
+ if(!report||typeof report.forEach!=='function')return null;
+ const stats=new Map();
+ report.forEach((entry,key)=>stats.set(entry.id||key,entry));
+ let selected=null;
+ report.forEach(entry=>{
+  if(entry.type==='transport'&&entry.selectedCandidatePairId)selected=stats.get(entry.selectedCandidatePairId)||selected;
+ });
+ if(!selected)report.forEach(entry=>{
+  if(entry.type==='candidate-pair'&&entry.state==='succeeded'&&(entry.nominated||entry.selected))selected=entry;
+ });
+ if(!selected)return {state:'no-selected-pair'};
+ const local=stats.get(selected.localCandidateId);
+ const remote=stats.get(selected.remoteCandidateId);
+ const type=local?.candidateType;
+ const safeType=['host','srflx','prflx','relay'].includes(type)?type:'unknown';
+ const protocol=String(local?.protocol||'').toLowerCase();
+ return {
+  state:selected.state==='succeeded'?'connected':'checking',
+  candidateType:safeType,
+  protocol:['udp','tcp'].includes(protocol)?protocol:'unknown',
+  relayed:safeType==='relay',
+  remoteCandidateType:['host','srflx','prflx','relay'].includes(remote?.candidateType)?remote.candidateType:'unknown'
+ };
+}

@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {RoomEvent,Track} from 'livekit-client';
-import {summarizeRoom,explainCameraState,summarizeVideoRtpStats} from './meeting-diagnostics.mjs';
+import {summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport} from './meeting-diagnostics.mjs';
 
 const WATCHED=[
  RoomEvent.ParticipantConnected,RoomEvent.ParticipantDisconnected,
@@ -14,6 +14,7 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
  const [snapshot,setSnapshot]=useState(()=>summarizeRoom(room));
  const [errors,setErrors]=useState([]);
  const [videoStats,setVideoStats]=useState({});
+ const [icePath,setIcePath]=useState(null);
  const lastFrames=useRef({});
  useEffect(()=>{
   let live=true;
@@ -28,13 +29,15 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
        const report=await track.getRTCStatsReport();
        const stats=summarizeVideoRtpStats(report,!!p.isLocal);
        const previous=lastFrames.current[key];
-       return [key,stats?{...stats,deltaFrames:previous===undefined?null:Math.max(0,stats.frames-previous)}:null];
+       return [key,stats?{...stats,ice:summarizeICETransport(report),deltaFrames:previous===undefined?null:Math.max(0,stats.frames-previous)}:null];
      }catch{return [key,null];}
    }));
    if(!live)return;
    const next=Object.fromEntries(results.filter(([key])=>!!key));
    lastFrames.current=Object.fromEntries(results.filter(([,value])=>value).map(([key,value])=>[key,value.frames]));
    setVideoStats(next);
+   const selected=results.find(([,value])=>value?.ice);
+   setIcePath(selected?.[1]?.ice||null);
   };
   sample();
   const timer=setInterval(sample,4000);
@@ -63,6 +66,9 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
      <div className="nexus-drawer-head"><h2>Call health</h2><button type="button" onClick={onClose} aria-label="Close media diagnostics">✕</button></div>
      <div className="space-y-4 overflow-y-auto p-4 text-xs">
        <p>Connection: <strong>{snapshot.connectionState}</strong>. {snapshot.remoteCount} remote participant(s).</p>
+       <p>ICE selected route: <strong>{icePath?.state==='connected'?(icePath.relayed?'TURN relay':icePath.candidateType==='srflx'?'NAT/STUN direct':icePath.candidateType==='host'?'Local/direct':'Peer-reflexive/direct'):'Not established or unavailable'}</strong>{icePath?.protocol&&icePath.state==='connected'?` via ${icePath.protocol.toUpperCase()}`:''}.</p>
+       {icePath?.state==='connected'&&!icePath.relayed&&<p className="text-amber-300">Direct media is working for this peer path. Restrictive corporate/mobile networks may still need a reachable TURN/TLS relay on TCP 443.</p>}
+       {icePath?.state==='no-selected-pair'&&<p className="text-amber-300">No selected ICE candidate pair in available media stats. Check external media port forwarding or TURN relay access.</p>}
        {snapshot.participants.map((p,i)=><div key={p.participantKey||i} className="rounded-xl border border-zinc-700 p-3">
          <div className="mb-1 font-semibold">{p.name} {p.isLocal?'(you)':''}</div>
          <p>{explainCameraState(p.cameraState)}</p>
@@ -78,7 +84,7 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
        </div>)}
        {errors.length>0&&<div className="rounded-lg border border-amber-700 bg-amber-900/30 p-3"><strong>Recent subscription errors</strong>{errors.map((e,i)=><p key={i} className="mt-2 break-words">{e}</p>)}</div>}
        <p className="text-zinc-400">This panel reports actual LiveKit track and video frame counters. A local camera preview does not prove remote media delivery. If the connection never reaches connected, check ICE routing first.</p>
-       <button type="button" className="rounded-lg border border-indigo-500 px-3 py-2 text-indigo-200" onClick={()=>navigator.clipboard?.writeText(JSON.stringify({room:snapshot,videoRtpStats:videoStats,subscriptionErrors:errors},null,2)).catch(()=>{})}>Copy safe diagnostic report</button>
+       <button type="button" className="rounded-lg border border-indigo-500 px-3 py-2 text-indigo-200" onClick={()=>navigator.clipboard?.writeText(JSON.stringify({room:snapshot,videoRtpStats:videoStats,icePath,subscriptionErrors:errors},null,2)).catch(()=>{})}>Copy safe diagnostic report</button>
      </div>
    </div>}
  </>;
