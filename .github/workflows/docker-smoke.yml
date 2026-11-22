@@ -52,9 +52,14 @@ jobs:
       - name: Verify container boot and internal health
         run: |
           set -euo pipefail
+          # The app can be starting even after Docker says its container
+          # is running. Retry both checks, not just the /api/health request.
+          # Avoid SIGPIPE/pipefail aborting when a command is temporarily down.
           for i in $(seq 1 45); do
-            if docker compose exec -T app wget -q -O - http://127.0.0.1:3000/api/health | grep -q '"ok"'; then
-              docker compose exec -T app wget -q -O - http://127.0.0.1:3000/ | grep -q 'Nexus Workspace'
+            health="$(docker compose exec -T app wget -q -O - http://127.0.0.1:3000/api/health 2>/dev/null || true)"
+            homepage="$(docker compose exec -T app wget -q -O - http://127.0.0.1:3000/ 2>/dev/null || true)"
+            if [[ "$health" == *'"ok"'* && "$homepage" == *'Nexus Workspace'* ]]; then
+              echo "Go API and frontend passed readiness checks."
               exit 0
             fi
             sleep 2
