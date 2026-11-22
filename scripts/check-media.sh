@@ -10,9 +10,11 @@ mode="$(read_setting NOVANEXUS_MEDIA_MODE)"
 origin="$(read_setting NOVANEXUS_DOMAIN)"
 tunnel="$(read_setting NOVANEXUS_TUNNEL_DOMAIN)"
 public="$(read_setting NOVANEXUS_PUBLIC_DOMAIN)"
+pinned_ip="$(read_setting NOVANEXUS_MEDIA_PUBLIC_IP)"
 echo "=== NovaNexus LiveKit media diagnostics (no secrets) ==="
 printf 'Local HTTPS origin: %s\n' "$origin"
 printf 'Media mode: %s\n' "${mode:-unconfigured (older installation)}"
+if [[ -n "$pinned_ip" ]]; then printf 'Public ICE address override: %s\n' "$pinned_ip"; fi
 printf 'Tunnel domain recorded: %s\n' "${tunnel:-not configured in installer}"
 printf 'Other public hostname recorded: %s\n' "${public:-not configured}"
 echo "ICE configuration:"
@@ -37,15 +39,22 @@ if [[ "$mode" != public ]]; then
  echo "After establishing external media forwarding, rerun: NOVANEXUS_MEDIA_MODE=public bash /root/novanexus-install.sh"
  exit 1
 fi
-if ! grep -Eq '^[[:space:]]+use_external_ip:[[:space:]]+true' livekit.yaml; then
- echo "ERROR: Public media mode saved but LiveKit is not configured for public ICE candidates." >&2
+if [[ -n "$pinned_ip" ]]; then
+ if ! grep -Eq '^[[:space:]]+use_external_ip:[[:space:]]+false' livekit.yaml ||
+    ! grep -Fqx "  node_ip: $pinned_ip" livekit.yaml; then
+  echo "ERROR: Pinned public media IPv4 is not reflected in the active LiveKit ICE config." >&2
+  exit 1
+ fi
+ echo "Public ICE candidate is explicitly configured; remote reachability is NOT verified."
+elif ! grep -Eq '^[[:space:]]+use_external_ip:[[:space:]]+true' livekit.yaml; then
+ echo "ERROR: Public media mode saved but LiveKit is not configured for STUN public ICE candidates." >&2
  exit 1
 fi
 if ! grep -Eq '^[[:space:]]+allow_udp_unstable_fallback:[[:space:]]+true' livekit.yaml; then
  echo "NOTICE: Deployed LiveKit is not configured to migrate away from lossy UDP."
  echo "Re-run the updated one-click installer to enable TCP fallback."
 fi
-if ! grep -Eq '^[[:space:]]+skip_external_ip_validation:[[:space:]]+true' livekit.yaml; then
+if [[ -z "$pinned_ip" ]] && ! grep -Eq '^[[:space:]]+skip_external_ip_validation:[[:space:]]+true' livekit.yaml; then
  echo "NOTICE: NAT hairpin validation may hide the public IP on nested LXC and Docker."
 fi
 echo "Public ICE candidate mode is configured. External port forwarding/relay is STILL UNVERIFIED."
