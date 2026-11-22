@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {summarizeParticipant,summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport} from '../src/meeting-diagnostics.mjs';
+import {summarizeParticipant,summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport,advanceRemoteVideoHealth} from '../src/meeting-diagnostics.mjs';
 const mock=(pubs,isLocal=false)=>({name:isLocal?'Me':'Remote',isLocal,trackPublications:new Map(pubs)});
 test('distinguishes remote unpublished from subscription failure',()=>{
  const absent=summarizeParticipant(mock([]));
@@ -64,4 +64,34 @@ test('ICE summary recognizes a TCP TURN relay and missing path',()=>{
  assert.equal(summarizeICETransport(relay).relayed,true);
  assert.equal(summarizeICETransport(new Map()).state,'no-selected-pair');
  assert.equal(summarizeICETransport(null),null);
+});
+
+test('remote video health waits for repeated failures before flagging black frames',()=>{
+ let state=advanceRemoteVideoHealth(null,{frames:3,packets:100});
+ assert.equal(state.status,'warming-up');
+ state=advanceRemoteVideoHealth(state,{frames:3,packets:101});
+ assert.equal(state.status,'warming-up');
+ state=advanceRemoteVideoHealth(state,{frames:3,packets:102});
+ assert.equal(state.status,'warming-up');
+ state=advanceRemoteVideoHealth(state,{frames:3,packets:103});
+ assert.equal(state.status,'decode-stalled');
+ state=advanceRemoteVideoHealth(state,{frames:4,packets:104});
+ assert.equal(state.status,'receiving');
+ assert.equal(state.stalledSamples,0);
+});
+test('remote RTP loss is distinguished from decoder stall and camera mute',()=>{
+ let state=advanceRemoteVideoHealth(null,{frames:4,packets:10});
+ for(let n=0;n<3;n++)state=advanceRemoteVideoHealth(state,{frames:4,packets:10});
+ assert.equal(state.status,'no-video-packets');
+ assert.equal(advanceRemoteVideoHealth(state,{frames:4,packets:10},false).status,'unavailable');
+ assert.equal(advanceRemoteVideoHealth(state,null).status,'unavailable');
+});
+
+test('remote RTP counter resets after renegotiation do not raise false stalls',()=>{
+ let state=advanceRemoteVideoHealth(null,{frames:140,packets:700});
+ state=advanceRemoteVideoHealth(state,{frames:0,packets:0});
+ assert.equal(state.status,'warming-up');
+ assert.equal(state.stalledSamples,0);
+ state=advanceRemoteVideoHealth(state,{frames:3,packets:15});
+ assert.equal(state.status,'receiving');
 });

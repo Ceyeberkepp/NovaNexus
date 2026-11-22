@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {RoomEvent,Track} from 'livekit-client';
-import {summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport} from './meeting-diagnostics.mjs';
+import {summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport,advanceRemoteVideoHealth} from './meeting-diagnostics.mjs';
 
 const WATCHED=[
  RoomEvent.ParticipantConnected,RoomEvent.ParticipantDisconnected,
@@ -14,6 +14,8 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
  const [snapshot,setSnapshot]=useState(()=>summarizeRoom(room));
  const [errors,setErrors]=useState([]);
  const [videoStats,setVideoStats]=useState({});
+ const [remoteVideoHealth,setRemoteVideoHealth]=useState({});
+ const healthRef=useRef({});
  const [icePath,setIcePath]=useState(null);
  const lastFrames=useRef({});
  useEffect(()=>{
@@ -36,6 +38,18 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
    const next=Object.fromEntries(results.filter(([key])=>!!key));
    lastFrames.current=Object.fromEntries(results.filter(([,value])=>value).map(([key,value])=>[key,value.frames]));
    setVideoStats(next);
+   const health={};
+   for(const p of participants){
+     if(p.isLocal)continue;
+     const key=p.sid||p.identity;
+     if(!key)continue;
+     const publication=Array.from(p.trackPublications.values()).find(pub=>pub.source===Track.Source.Camera);
+     const active=!!publication&&!publication.isMuted&&publication.isSubscribed===true&&!!publication.track;
+     const current=advanceRemoteVideoHealth(healthRef.current[key],next[key],active);
+     health[key]=current;
+   }
+   healthRef.current=health;
+   setRemoteVideoHealth(health);
    const selected=results.find(([,value])=>value?.ice);
    setIcePath(selected?.[1]?.ice||null);
   };
@@ -58,9 +72,10 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
  },[room,refresh]);
  const warning=snapshot.participants.find(p=>!p.isLocal&&p.cameraState!=='video-active'&&p.cameraState!=='camera-off');
  const badConnection=snapshot.connectionState!=='connected';
+ const stalled=snapshot.participants.find(p=>!p.isLocal&&['decode-stalled','no-video-packets'].includes(remoteVideoHealth[p.participantKey]?.status));
  return <>
-   {(warning||badConnection)&&!expanded&&<div role="status" className="nexus-media-warning">
-      {badConnection?'Media: '+snapshot.connectionState:warning?.name+': '+explainCameraState(warning.cameraState)}
+   {(warning||badConnection||stalled)&&!expanded&&<div role="status" className="nexus-media-warning">
+      {badConnection?'Media: '+snapshot.connectionState:stalled?stalled.name+': '+(remoteVideoHealth[stalled.participantKey]?.status==='decode-stalled'?'Video packets received but no new frames decoded':'No new remote video packets or decoded frames'):warning?.name+': '+explainCameraState(warning.cameraState)}
    </div>}
    {expanded&&<div className="nexus-media-diagnostics" role="dialog" aria-label="Meeting media diagnostics">
      <div className="nexus-drawer-head"><h2>Call health</h2><button type="button" onClick={onClose} aria-label="Close media diagnostics">✕</button></div>
@@ -72,6 +87,8 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
        {snapshot.participants.map((p,i)=><div key={p.participantKey||i} className="rounded-xl border border-zinc-700 p-3">
          <div className="mb-1 font-semibold">{p.name} {p.isLocal?'(you)':''}</div>
          <p>{explainCameraState(p.cameraState)}</p>
+         {!p.isLocal&&remoteVideoHealth[p.participantKey]?.status==='decode-stalled'&&<p className="mt-2 font-semibold text-amber-300">Black video suspected: RTP packets continue, but video frames are not decoding. Check browser decoder, codec negotiation, and hardware acceleration.</p>}
+         {!p.isLocal&&remoteVideoHealth[p.participantKey]?.status==='no-video-packets'&&<p className="mt-2 font-semibold text-amber-300">Remote video stalled: no additional RTP packets or decoded frames across three samples. Check ICE media forwarding, TURN/TLS, and sender publication.</p>}
          {!p.isLocal&&p.cameraPublished&&<p>Remote camera subscribed: {p.cameraSubscribed?'Yes':'Not yet'}</p>}
          {(()=>{
            const video=videoStats[p.participantKey];
@@ -84,7 +101,7 @@ export default function MeetingDiagnostics({room,expanded=false,onClose}){
        </div>)}
        {errors.length>0&&<div className="rounded-lg border border-amber-700 bg-amber-900/30 p-3"><strong>Recent subscription errors</strong>{errors.map((e,i)=><p key={i} className="mt-2 break-words">{e}</p>)}</div>}
        <p className="text-zinc-400">This panel reports actual LiveKit track and video frame counters. A local camera preview does not prove remote media delivery. If the connection never reaches connected, check ICE routing first.</p>
-       <button type="button" className="rounded-lg border border-indigo-500 px-3 py-2 text-indigo-200" onClick={()=>navigator.clipboard?.writeText(JSON.stringify({room:snapshot,videoRtpStats:videoStats,icePath,subscriptionErrors:errors},null,2)).catch(()=>{})}>Copy safe diagnostic report</button>
+       <button type="button" className="rounded-lg border border-indigo-500 px-3 py-2 text-indigo-200" onClick={()=>navigator.clipboard?.writeText(JSON.stringify({room:snapshot,videoRtpStats:videoStats,remoteVideoHealth,icePath,subscriptionErrors:errors},null,2)).catch(()=>{})}>Copy safe diagnostic report</button>
      </div>
    </div>}
  </>;

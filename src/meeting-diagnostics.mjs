@@ -87,3 +87,28 @@ export function summarizeICETransport(report) {
   remoteCandidateType:['host','srflx','prflx','relay'].includes(remote?.candidateType)?remote.candidateType:'unknown'
  };
 }
+
+
+// A remote video track can remain "live" while its RTP media stops arriving
+// or decoding. Require three consecutive non-progressing samples (~12 seconds
+// at the call-health sampling cadence) before reporting a stall. The first
+// sample alone cannot establish whether the camera is stalled.
+export function advanceRemoteVideoHealth(previous,stats,active=true) {
+ if(!active||!stats||!Number.isFinite(stats.frames)||!Number.isFinite(stats.packets))
+  return {lastFrames:null,lastPackets:null,stalledSamples:0,status:'unavailable'};
+ const frames=Math.max(0,stats.frames);
+ const packets=Math.max(0,stats.packets);
+ if(!previous||previous.lastFrames===null||previous.lastPackets===null)
+  return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'warming-up'};
+ // A replaced/renegotiated track can reset RTP counters; treat it as a new
+ // baseline rather than incorrectly reporting a persistent black tile.
+ if(frames<previous.lastFrames||packets<previous.lastPackets)
+  return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'warming-up'};
+ if(frames>previous.lastFrames)
+  return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'receiving'};
+ const stalledSamples=(previous.stalledSamples||0)+1;
+ const status=stalledSamples>=3
+  ? (packets>previous.lastPackets?'decode-stalled':'no-video-packets')
+  : 'warming-up';
+ return {lastFrames:frames,lastPackets:packets,stalledSamples,status};
+}
