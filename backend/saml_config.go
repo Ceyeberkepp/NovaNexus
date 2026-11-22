@@ -6,6 +6,7 @@ import (
  "net/http"
  "net/url"
  "strings"
+ "time"
 )
 
 // SAML configuration is deliberately separate from the login flow.
@@ -22,7 +23,14 @@ func validSAMLProvider(entityID, loginURL, certificate string) bool {
  block,_:=pem.Decode([]byte(certificate))
  if block==nil||block.Type!="CERTIFICATE" {return false}
  cert,e:=x509.ParseCertificate(block.Bytes)
- return e==nil && cert.PublicKey!=nil
+ if e!=nil||cert.PublicKey==nil{return false}
+ now:=time.Now()
+ // An IdP signing certificate must be usable now. Certificate rotation
+ // should be performed before expiry, not accepted silently afterward.
+ if now.Before(cert.NotBefore)||!now.Before(cert.NotAfter){return false}
+ // A certificate explicitly limited to other uses cannot sign assertions.
+ if cert.KeyUsage!=0 && cert.KeyUsage&x509.KeyUsageDigitalSignature==0{return false}
+ return true
 }
 
 func (s *Server) samlConfigurationAPI(w http.ResponseWriter,r *http.Request) {
