@@ -21,6 +21,23 @@ valid_ipv4(){
   done
   [[ "$address" != 0.0.0.0 && "$address" != 255.255.255.255 && "${parts[0]}" != 127 ]]
 }
+# Reject private, shared, reserved, and documentation ranges for a public
+# ICE address. This value is advertised to remote browsers, not a bind address.
+valid_public_ipv4(){
+  local address="$1" first second
+  valid_ipv4 "$address" || return 1
+  IFS=. read -r first second _ <<< "$address"
+  (( first >= 1 && first <= 223 )) || return 1
+  (( first != 10 && first != 127 )) || return 1
+  (( first != 172 || second < 16 || second > 31 )) || return 1
+  (( first != 192 || second != 168 )) || return 1
+  (( first != 169 || second != 254 )) || return 1
+  (( first != 100 || second < 64 || second > 127 )) || return 1
+  (( first != 198 || (second != 18 && second != 19) )) || return 1
+  (( first != 192 || second != 0 )) || return 1
+  [[ "$address" != 192.0.2.* && "$address" != 198.51.100.* && "$address" != 203.0.113.* ]] || return 1
+  return 0
+}
 detect_ipv4(){
   local candidate fallback=""
   # Prefer the host default-route source, not the Docker bridge (e.g., 172.17.0.1).
@@ -69,6 +86,8 @@ NOVANEXUS_HTTP_PORT=${NOVANEXUS_HTTP_PORT:-}
 # Explicitly select WAN WebRTC media when HTTPS is published through a tunnel.
 # The tunnel only handles signaling, not the UDP media path.
 NOVANEXUS_MEDIA_MODE=${NOVANEXUS_MEDIA_MODE:-}
+# Optional explicitly forwarded public IPv4; leave unset to preserve STUN discovery.
+NOVANEXUS_MEDIA_PUBLIC_IP=${NOVANEXUS_MEDIA_PUBLIC_IP:-}
 LAN_IP=$(detect_ipv4 || true)
 if [[ "$RESUME_INSTALL" == 1 ]]; then
   NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
@@ -88,6 +107,9 @@ if [[ "$RESUME_INSTALL" == 1 ]]; then
   fi
   if [[ -z "$NOVANEXUS_MEDIA_MODE" ]]; then
     NOVANEXUS_MEDIA_MODE=$(sed -n 's/^NOVANEXUS_MEDIA_MODE=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
+  if [[ -z "$NOVANEXUS_MEDIA_PUBLIC_IP" ]]; then
+    NOVANEXUS_MEDIA_PUBLIC_IP=$(sed -n 's/^NOVANEXUS_MEDIA_PUBLIC_IP=//p' "$ROOT_DIR/.env" | head -n1)
   fi
 elif [[ -z "$NOVANEXUS_DOMAIN" ]]; then
   NOVANEXUS_DOMAIN=$(detect_ipv4 || true)
@@ -284,11 +306,21 @@ if [[ -z "$NOVANEXUS_MEDIA_MODE" ]]; then
   fi
 fi
 [[ "$NOVANEXUS_MEDIA_MODE" == lan || "$NOVANEXUS_MEDIA_MODE" == public ]] || fail "NOVANEXUS_MEDIA_MODE must be lan or public."
+if [[ -n "$NOVANEXUS_MEDIA_PUBLIC_IP" ]]; then
+  valid_public_ipv4 "$NOVANEXUS_MEDIA_PUBLIC_IP" || fail "NOVANEXUS_MEDIA_PUBLIC_IP must be a public routable IPv4 address, not a private or reserved IP."
+  [[ "$NOVANEXUS_MEDIA_MODE" == public ]] || fail "An explicit public media IP requires NOVANEXUS_MEDIA_MODE=public."
+fi
 PUBLIC_MEDIA=0
 if [[ "$NOVANEXUS_MEDIA_MODE" == public ]]; then PUBLIC_MEDIA=1; fi
 # Persist mode for future upgrades. This is not a new website address/port.
 sed -i '/^NOVANEXUS_MEDIA_MODE=/d' .env
 printf 'NOVANEXUS_MEDIA_MODE=%s\n' "$NOVANEXUS_MEDIA_MODE" >> .env
+# Preserve the known good STUN mode unless the operator explicitly sets an
+# address that is genuinely forwarded to this machine.
+sed -i '/^NOVANEXUS_MEDIA_PUBLIC_IP=/d' .env
+if [[ -n "$NOVANEXUS_MEDIA_PUBLIC_IP" ]]; then
+  printf 'NOVANEXUS_MEDIA_PUBLIC_IP=%s\n' "$NOVANEXUS_MEDIA_PUBLIC_IP" >> .env
+fi
 log "LiveKit media mode: $NOVANEXUS_MEDIA_MODE"
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   # Nested LXC -> Docker and home NAT commonly cannot self-ping the public
@@ -301,6 +333,17 @@ if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   allow_tcp_fallback: true
   tcp_fallback_rtt_threshold: 1500
   allow_udp_unstable_fallback: true'
+  if [[ -n "$NOVANEXUS_MEDIA_PUBLIC_IP" ]]; then
+    # STUN can discover an outbound CGNAT address different from the inbound
+    # port-forward target. An explicit public node_ip takes precedence only
+    # when use_external_ip is disabled.
+    MEDIA_RTC_CONFIG="  use_external_ip: false
+  node_ip: $NOVANEXUS_MEDIA_PUBLIC_IP
+  allow_tcp_fallback: true
+  tcp_fallback_rtt_threshold: 1500
+  allow_udp_unstable_fallback: true"
+    log "Pinned public ICE candidate to $NOVANEXUS_MEDIA_PUBLIC_IP (inbound forwarding is still required)."
+  fi
   MEDIA_TURN_CONFIG='turn:
   enabled: true
   udp_port: 3478'
@@ -456,6 +499,11 @@ elif [[ "$TLS_MODE" == public ]]; then
 fi
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   log "Internet media requires reachable TCP 7881, UDP 7882 and TURN UDP 3478; HTTPS on TCP 443 alone does NOT carry WebRTC media."
+  if [[ -n "$NOVANEXUS_MEDIA_PUBLIC_IP" ]]; then
+    log "Pinned ICE candidate: $NOVANEXUS_MEDIA_PUBLIC_IP. Confirm your public gateway forwards the exact media ports without remapping."
+  else
+    log "ICE public IP is discovered by STUN. If STUN detects the wrong outbound address, explicitly provide NOVANEXUS_MEDIA_PUBLIC_IP with a verified inbound-forwarded public IPv4."
+  fi
   log "Forward TCP 80/443, TCP 7881, UDP 7882 and UDP 3478 from the public gateway to this host, unless an existing secure ingress/relay handles those services."
   log "Internet access is NOT confirmed by this local health check. Verify from a device outside the LAN."
 else
