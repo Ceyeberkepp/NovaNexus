@@ -94,23 +94,23 @@ export function summarizeICETransport(report) {
 // at the call-health sampling cadence) before reporting a stall. The first
 // sample alone cannot establish whether the camera is stalled.
 export function advanceRemoteVideoHealth(previous,stats,active=true) {
- if(!active||!stats||!Number.isFinite(stats.frames)||!Number.isFinite(stats.packets))
-  return {lastFrames:null,lastPackets:null,stalledSamples:0,status:'unavailable'};
+ const unavailable={lastFrames:null,lastPackets:null,stalledSamples:0,packetsProgressed:false,status:'unavailable'};
+ if(!active||!stats||!Number.isFinite(stats.frames)||!Number.isFinite(stats.packets))return unavailable;
  const frames=Math.max(0,stats.frames);
  const packets=Math.max(0,stats.packets);
- if(!previous||previous.lastFrames===null||previous.lastPackets===null)
-  return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'warming-up'};
- // A replaced/renegotiated track can reset RTP counters; treat it as a new
- // baseline rather than incorrectly reporting a persistent black tile.
- if(frames<previous.lastFrames||packets<previous.lastPackets)
-  return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'warming-up'};
- if(frames>previous.lastFrames)
-  return {lastFrames:frames,lastPackets:packets,stalledSamples:0,status:'receiving'};
+ const baseline={lastFrames:frames,lastPackets:packets,stalledSamples:0,packetsProgressed:false,status:'warming-up'};
+ if(!previous||previous.lastFrames===null||previous.lastPackets===null)return baseline;
+ // RTP counters reset when a stream is replaced or renegotiated.
+ if(frames<previous.lastFrames||packets<previous.lastPackets)return baseline;
+ if(frames>previous.lastFrames)return {...baseline,status:'receiving'};
  const stalledSamples=(previous.stalledSamples||0)+1;
- const status=stalledSamples>=3
-  ? (packets>previous.lastPackets?'decode-stalled':'no-video-packets')
-  : 'warming-up';
- return {lastFrames:frames,lastPackets:packets,stalledSamples,status};
+ // Preserve evidence of arriving packets across the entire stalled interval.
+ // The final sample may be quiet even when earlier samples delivered video.
+ const packetsProgressed=!!previous.packetsProgressed||packets>previous.lastPackets;
+ return {
+  lastFrames:frames,lastPackets:packets,stalledSamples,packetsProgressed,
+  status:stalledSamples>=3?(packetsProgressed?'decode-stalled':'no-video-packets'):'warming-up'
+ };
 }
 
 // A newly subscribed camera publication must start a new RTP baseline even

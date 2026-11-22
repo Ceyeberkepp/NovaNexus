@@ -111,3 +111,25 @@ test('new remote camera track identity resets stalled RTP baseline even with ide
  const newHealth=advanceRemoteVideoHealth(null,{frames:10,packets:20});
  assert.equal(newHealth.status,'warming-up');
 });
+
+test('remote decoder stall retains earlier RTP packet progress when last sample is quiet',()=>{
+ let state=advanceRemoteVideoHealth(null,{frames:5,packets:100});
+ state=advanceRemoteVideoHealth(state,{frames:5,packets:101});
+ state=advanceRemoteVideoHealth(state,{frames:5,packets:101});
+ state=advanceRemoteVideoHealth(state,{frames:5,packets:101});
+ assert.equal(state.status,'decode-stalled');
+ assert.equal(state.packetsProgressed,true);
+ state=advanceRemoteVideoHealth(state,{frames:6,packets:102});
+ assert.equal(state.status,'receiving');
+ assert.equal(state.packetsProgressed,false);
+});
+
+test('remote video stall reset clears accumulated packet evidence',()=>{
+ let state=advanceRemoteVideoHealth(null,{frames:5,packets:100});
+ state=advanceRemoteVideoHealth(state,{frames:5,packets:101});
+ state=advanceRemoteVideoHealth(state,{frames:0,packets:0});
+ assert.equal(state.status,'warming-up');
+ assert.equal(state.packetsProgressed,false);
+ for(let i=0;i<3;i++)state=advanceRemoteVideoHealth(state,{frames:0,packets:0});
+ assert.equal(state.status,'no-video-packets');
+});
