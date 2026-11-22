@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {summarizeParticipant,summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport,advanceRemoteVideoHealth} from '../src/meeting-diagnostics.mjs';
+import {summarizeParticipant,summarizeRoom,explainCameraState,summarizeVideoRtpStats,summarizeICETransport,advanceRemoteVideoHealth,remoteVideoTrackChanged} from '../src/meeting-diagnostics.mjs';
 const mock=(pubs,isLocal=false)=>({name:isLocal?'Me':'Remote',isLocal,trackPublications:new Map(pubs)});
 test('distinguishes remote unpublished from subscription failure',()=>{
  const absent=summarizeParticipant(mock([]));
@@ -94,4 +94,20 @@ test('remote RTP counter resets after renegotiation do not raise false stalls',(
  assert.equal(state.stalledSamples,0);
  state=advanceRemoteVideoHealth(state,{frames:3,packets:15});
  assert.equal(state.status,'receiving');
+});
+
+test('new remote camera track identity resets stalled RTP baseline even with identical counters',()=>{
+ const oldTrack={sid:'old'};
+ const newTrack={sid:'new'};
+ assert.equal(remoteVideoTrackChanged(oldTrack,oldTrack),false);
+ assert.equal(remoteVideoTrackChanged(oldTrack,newTrack),true);
+ assert.equal(remoteVideoTrackChanged(oldTrack,null),true);
+ assert.equal(remoteVideoTrackChanged(null,newTrack),true);
+ // A fresh track starts warm-up rather than inheriting the prior track's
+ // decode-stalled or no-video-packets state.
+ let oldHealth=advanceRemoteVideoHealth(null,{frames:10,packets:20});
+ for(let i=0;i<3;i++)oldHealth=advanceRemoteVideoHealth(oldHealth,{frames:10,packets:20});
+ assert.equal(oldHealth.status,'no-video-packets');
+ const newHealth=advanceRemoteVideoHealth(null,{frames:10,packets:20});
+ assert.equal(newHealth.status,'warming-up');
 });
