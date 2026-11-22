@@ -126,7 +126,11 @@ jobs:
           temp_root="$(mktemp -d)"
           printf '%s\n' 'NOVANEXUS_DOMAIN=127.0.0.1' > "$temp_root/.env"
           cp /tmp/novanexus-local-ca.crt "$temp_root/novanexus-local-root-ca.crt"
-          NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh | grep -q 'PASS: Original HTTPS endpoint'
+          # Capture the whole diagnostic: grep -q on a live pipe can close
+          # stdout early, causing echo to fail under pipefail (SIGPIPE).
+          origin_report="$(NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh)"
+          grep -q 'PASS: Original HTTPS endpoint' <<< "$origin_report"
+          grep -q 'PASS: Tunnel Host header accepted' <<< "$origin_report"
           rm -rf "$temp_root"
           docker compose config --format json | python3 -c 'import sys,json; ports=json.load(sys.stdin)["services"]["https"]["ports"]; assert sorted((str(p["target"]),p["protocol"]) for p in ports)==[("443","tcp"),("443","udp"),("80","tcp")],ports'
       - name: Container logs on failure
