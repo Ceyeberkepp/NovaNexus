@@ -72,6 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'default_sni {$NOVANEXUS_DOMAIN}' Caddyfile
+          grep -q '^:443 {' Caddyfile
           sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
           NOVANEXUS_DOMAIN=127.0.0.1 docker compose up -d https
           docker compose ps --status running livekit
@@ -81,6 +82,7 @@ jobs:
           for n in $(seq 1 30); do
             if docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > /tmp/novanexus-local-ca.crt 2>/dev/null && test -s /tmp/novanexus-local-ca.crt; then
               if curl -fsS --noproxy "*" --resolve "127.0.0.1:443:127.0.0.1" --cacert /tmp/novanexus-local-ca.crt https://127.0.0.1/api/health | grep -q '"status":"ok"'; then
+                curl -fsS --noproxy "*" --resolve "127.0.0.1:443:127.0.0.1" --cacert /tmp/novanexus-local-ca.crt -H "Host: tunnel.example.test" https://127.0.0.1/api/health | grep -q '"status":"ok"'
                 exit 0
               fi
             fi
@@ -127,7 +129,11 @@ jobs:
           temp_root="$(mktemp -d)"
           printf '%s\n' 'NOVANEXUS_DOMAIN=127.0.0.1' > "$temp_root/.env"
           cp /tmp/novanexus-local-ca.crt "$temp_root/novanexus-local-root-ca.crt"
-          NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh | grep -q 'PASS: Original HTTPS endpoint'
+          # Capture the whole diagnostic: grep -q on a live pipe can close
+          # stdout early, causing echo to fail under pipefail (SIGPIPE).
+          origin_report="$(NOVANEXUS_ROOT_DIR="$temp_root" bash scripts/check-cloudflare-origin.sh)"
+          grep -q 'PASS: Original HTTPS endpoint' <<< "$origin_report"
+          grep -q 'PASS: Tunnel Host header accepted' <<< "$origin_report"
           rm -rf "$temp_root"
           docker compose config --format json | python3 -c 'import sys,json; ports=json.load(sys.stdin)["services"]["https"]["ports"]; assert sorted((str(p["target"]),p["protocol"]) for p in ports)==[("443","tcp"),("443","udp"),("80","tcp")],ports'
       - name: Container logs on failure

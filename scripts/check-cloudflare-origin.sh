@@ -31,6 +31,19 @@ if [[ "$RESPONSE" != *'"status":"ok"'* ]]; then
   exit 1
 fi
 echo "[NovaNexus] PASS: Original HTTPS endpoint is healthy."
+# Cloudflare normally sends the external hostname as Host, not the origin IP.
+# Verify that request routing works without an HTTP Host Header override.
+TUNNEL_HOST="$(sed -n 's/^NOVANEXUS_TUNNEL_DOMAIN=//p' "$ENV_FILE" | tail -n1)"
+[[ -n "$TUNNEL_HOST" ]] || TUNNEL_HOST="tunnel-origin-check.example.invalid"
+if ! RESPONSE="$(curl "${CURL_ARGS[@]}" -H "Host: $TUNNEL_HOST" "https://$DOMAIN/api/health" 2>&1)"; then
+  printf '[NovaNexus] FAIL: tunnel Host header %s rejected: %s\n' "$TUNNEL_HOST" "$RESPONSE" >&2
+  exit 1
+fi
+[[ "$RESPONSE" == *'"status":"ok"'* ]] || {
+  echo "[NovaNexus] FAIL: tunnel Host header did not route to the application." >&2
+  exit 1
+}
+echo "[NovaNexus] PASS: Tunnel Host header accepted; no manual HTTP Host Header required."
 printf '[NovaNexus] Cloudflare Tunnel service: HTTPS to %s:443\n' "$DOMAIN"
 echo "[NovaNexus] Cloudflare CA Pool expects a CERTIFICATE FILE PATH accessible to cloudflared, not pasted PEM text."
 echo "[NovaNexus] Copy/mount this CA onto the cloudflared host or container, then use that local path in CA Pool."
