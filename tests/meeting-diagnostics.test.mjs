@@ -86,3 +86,12 @@ test('remote RTP loss is distinguished from decoder stall and camera mute',()=>{
  assert.equal(advanceRemoteVideoHealth(state,{frames:4,packets:10},false).status,'unavailable');
  assert.equal(advanceRemoteVideoHealth(state,null).status,'unavailable');
 });
+
+test('remote RTP counter resets after renegotiation do not raise false stalls',()=>{
+ let state=advanceRemoteVideoHealth(null,{frames:140,packets:700});
+ state=advanceRemoteVideoHealth(state,{frames:0,packets:0});
+ assert.equal(state.status,'warming-up');
+ assert.equal(state.stalledSamples,0);
+ state=advanceRemoteVideoHealth(state,{frames:3,packets:15});
+ assert.equal(state.status,'receiving');
+});
