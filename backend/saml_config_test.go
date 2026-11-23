@@ -30,6 +30,8 @@ func TestSAMLProviderValidation(t *testing.T) {
   {"http endpoint","https://idp.example.com","http://idp.example.com/saml",cert},
   {"embedded credentials","https://idp.example.com","https://user:secret@idp.example.com/saml",cert},
   {"invalid certificate","https://idp.example.com","https://idp.example.com/saml","not PEM"},
+  {"second signing certificate","https://idp.example.com","https://idp.example.com/saml",cert+cert},
+  {"trailing unparsed data","https://idp.example.com","https://idp.example.com/saml",cert+"untrusted trailing data"},
   {"empty entity","","https://idp.example.com/saml",cert},
  } {
   t.Run(tc.name,func(t *testing.T){if validSAMLProvider(tc.entity,tc.url,tc.cert){t.Fatal("invalid IdP config accepted")}})
