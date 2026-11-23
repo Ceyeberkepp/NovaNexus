@@ -141,11 +141,19 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.media-host.yml ps --status running media-signaling-bridge | grep -q media-signaling-bridge
           docker compose -f docker-compose.yml -f docker-compose.media-host.yml ps --status running livekit | grep -q livekit
           # The bridged alias must respond on LiveKit's 7880 signaling socket.
-          response="$(docker compose exec -T https wget -S -O /dev/null http://livekit:7880/ 2>&1 || true)"
-          grep -Eq 'HTTP/1\\.[01] (400|404|200)' <<< "$response" || {
+          connected=0
+          for attempt in $(seq 1 20); do
+            response="$(docker compose exec -T https wget -S -O /dev/null http://livekit:7880/ 2>&1 || true)"
+            if grep -Eq 'HTTP/[0-9.]+ (200|400|404)' <<< "$response"; then
+              connected=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$connected" -ne 1 ]; then
             docker compose -f docker-compose.yml -f docker-compose.media-host.yml logs --tail=50 livekit media-signaling-bridge
             exit 1
-          }
+          fi
           curl -fkSs --noproxy '*' https://127.0.0.1/api/health | grep -q '"status":"ok"'
       - name: Diagnose single Cloudflare HTTPS origin on port 443
         run: |
