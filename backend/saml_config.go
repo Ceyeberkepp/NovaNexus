@@ -2,6 +2,9 @@ package main
 
 import (
  "crypto/x509"
+ "crypto/rsa"
+ "crypto/ecdsa"
+ "crypto/ed25519"
  "encoding/pem"
  "net/http"
  "net/url"
@@ -24,6 +27,18 @@ func validSAMLProvider(entityID, loginURL, certificate string) bool {
  if block==nil||block.Type!="CERTIFICATE" {return false}
  cert,e:=x509.ParseCertificate(block.Bytes)
  if e!=nil||cert.PublicKey==nil{return false}
+ // Do not allow obsolete IdP assertion-signing keys. This is only
+ // configuration validation, NOT a SAML assertion verifier.
+ switch key:=cert.PublicKey.(type) {
+ case *rsa.PublicKey:
+  if key.N.BitLen()<2048{return false}
+ case *ecdsa.PublicKey:
+  if key.Curve.Params().BitSize<256{return false}
+ case ed25519.PublicKey:
+  if len(key)!=ed25519.PublicKeySize{return false}
+ default:
+  return false
+ }
  now:=time.Now()
  // An IdP signing certificate must be usable now. Certificate rotation
  // should be performed before expiry, not accepted silently afterward.
