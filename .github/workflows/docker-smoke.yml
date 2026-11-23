@@ -135,7 +135,7 @@ jobs:
         run: |
           set -euo pipefail
           https_before="$(docker inspect -f '{{.Id}}' novanexus-https-1)"
-          docker compose -f docker-compose.yml -f docker-compose.media-host.yml \\
+          docker compose -f docker-compose.yml -f docker-compose.media-host.yml \
             up -d --no-deps --force-recreate livekit media-signaling-bridge
           test "$(docker inspect -f '{{.Id}}' novanexus-https-1)" = "$https_before"
           docker compose -f docker-compose.yml -f docker-compose.media-host.yml ps --status running media-signaling-bridge | grep -q media-signaling-bridge
