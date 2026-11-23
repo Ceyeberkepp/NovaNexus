@@ -18,7 +18,7 @@
     }
     @livekit path /rtc /rtc/*
     handle @livekit {
-        reverse_proxy livekit:7880
+        reverse_proxy {$LIVEKIT_SIGNALING_UPSTREAM:livekit:7880}
     }
     handle {
         reverse_proxy app:3000

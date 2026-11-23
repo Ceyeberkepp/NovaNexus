@@ -1,0 +1,17 @@
+# Opt-in direct LAN/WAN media topology for NAT-hosted installations.
+# Start with: docker compose -f docker-compose.yml -f docker-compose.media-host.yml up -d
+# LiveKit then sees the Nexus host's LAN interface (not Docker 172.18.x.x)
+# while STUN can still advertise the public IPv4 address.
+# Existing app/database/Caddy services stay on the original Docker backend.
+# Requires Docker Compose v2.24+ (supports !reset). NEVER apply without
+# checking the effective config and preserving a working deployment.
+services:
+  livekit:
+    network_mode: host
+    ports: !reset []
+    networks: !reset []
+  https:
+    environment:
+      LIVEKIT_SIGNALING_UPSTREAM: host.docker.internal:7880
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

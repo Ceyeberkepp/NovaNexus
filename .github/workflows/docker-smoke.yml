@@ -40,6 +40,10 @@ jobs:
           grep -q 'use_external_ip: true' scripts/install.sh
           grep -q 'Cloudflare HTTP tunnels carry WSS signaling' scripts/check-media.sh
           docker compose config --quiet
+          bash scripts/test-media-host.sh
+          docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --format json |
+            python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; lk=s["livekit"]; assert lk.get("network_mode")=="host",lk; assert not lk.get("ports"),lk; assert not lk.get("networks"),lk; assert s["https"]["environment"]["LIVEKIT_SIGNALING_UPSTREAM"]=="host.docker.internal:7880"'
           test -f Dockerfile
           test -f Caddyfile
           test -s public/nexus-workspace-logo.webp

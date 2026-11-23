@@ -68,6 +68,7 @@ services:
     environment:
       NOVANEXUS_DOMAIN: ${NOVANEXUS_DOMAIN:?Domain required}
       TLS_EMAIL: ${TLS_EMAIL:?Email required}
+      LIVEKIT_SIGNALING_UPSTREAM: ${LIVEKIT_SIGNALING_UPSTREAM:-livekit:7880}
     ports:
       - "${NOVANEXUS_HTTP_PORT:-80}:80"
       - "443:443"
