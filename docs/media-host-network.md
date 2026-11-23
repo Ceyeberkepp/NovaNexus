@@ -1,78 +1,66 @@
-# LAN + internet LiveKit media on a single Nexus server
+# Optional LAN + public LiveKit media without changing Cloudflare Tunnel
 
-## Why this mode exists
+## Reason
+The default LiveKit Docker bridge advertises 172.18.x.x as an internal
+candidate, which is not reachable from a Windows computer on a 192.168.x.x
+LAN. The host-media override lets LiveKit advertise the Nexus host LAN IP
+as well as its STUN-discovered WAN IP. This addresses a plausible ICE routing
+problem; real laptop/iPhone media still needs validation.
 
-In the default Compose deployment, LiveKit runs on the isolated Docker bridge
-(e.g. `172.18.0.3`). Even with `rtc.advertise_internal_ip: true`, that is
-**not** the server's reachable LAN address (`192.168.0.52` in one installation).
-The other advertised candidate is the server's STUN-discovered public address.
-A LAN browser on a network without working NAT hairpin may reach neither.
-This optional mode moves **only LiveKit** to the Linux host network namespace.
-The other five services, database volumes, HTTPS routes and credentials remain
-on their existing Docker network.
+**Cloudflare Tunnel configuration, DNS, Caddyfile, additional-sites.caddy,
+Caddy HTTPS container, TLS certificates, and application database are unchanged
+by this override.** The existing HTTPS Caddy /rtc upstream still resolves
+`livekit:7880`: a small private Caddy signaling bridge acquires that Docker
+DNS alias and forwards HTTP/WebSocket signaling to LiveKit on the host network.
+Only the LiveKit container and new internal signaling bridge change.
 
-This is a targeted mitigation for LAN media failures, not a guarantee of working
-WebRTC over restrictive networks. **Cloudflare HTTP Tunnel carries signaling,
-not LiveKit UDP/TCP media; TURN/TLS still needs a distinct reachable TCP 443
-endpoint for UDP-blocking clients.** A working phone does not validate a laptop.
+## Preparation
+Take a Proxmox snapshot and back up `.env`, `Caddyfile`,
+`additional-sites.caddy`, `livekit.yaml`. Keep your current media IP discovery
+and credentials; **do not** run the one-click installer to activate this mode
+because it may regenerate site files.
 
-## Before use
-
-1. Take a VM/LXC snapshot and back up `.env`, `Caddyfile`,
-   `additional-sites.caddy`, and `livekit.yaml`.
-2. Confirm host networking is supported by your nested LXC. Do not modify
-   router NAT, disable firewalls, or disable unrelated security policies.
-3. Run the exact configuration validation first:
-
-```sh
+Check Docker Compose v2.24+ understands reset tags:
+```bash
 cd /opt/novanexus
 docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --quiet
-docker compose -f docker-compose.yml -f docker-compose.media-host.yml config |
-  sed -n '/^  livekit:/,/^  [a-z]/p'
+docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --format json |
+  python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; assert s["livekit"].get("network_mode")=="host"; assert not s["livekit"].get("ports"); assert not s["livekit"].get("networks"); assert s["media-signaling-bridge"]["networks"]; print("Media override validated")'
 ```
+The server's host-network ports TCP 7880/7881 and UDP 7882/3478 must be
+available after removing the old LiveKit container. Nested LXC must support
+Docker host networking. If validation fails, stop; do not change Caddy.
 
-Confirm the effective livekit service has `network_mode: host` and **no**
-`ports` or `networks` settings. If not, stop; your Docker Compose version
-doesn't correctly apply the override. Check ports 7880/TCP, 7881/TCP,
-7882/UDP and 3478/UDP will be available after the old LiveKit container stops.
-
-## Activate (opt-in only)
-
-```sh
+## Activate (short LiveKit call interruption, no Caddy restart)
+```bash
 cd /opt/novanexus
 docker compose -f docker-compose.yml -f docker-compose.media-host.yml \
-  up -d --no-deps --force-recreate livekit https
-docker compose -f docker-compose.yml -f docker-compose.media-host.yml ps
-curl -kfsS https://127.0.0.1/api/health
+  up -d --no-deps --force-recreate livekit media-signaling-bridge
+docker compose ps https
+curl -kfsS https://192.168.0.52/api/health
 ```
+The active calls may briefly disconnect because LiveKit is recreated. The
+Cloudflare Tunnel process, routing and Caddy HTTPS service are not restarted.
+Test both phone and Windows laptop in a new call. If LiveKit cannot bind host
+network ports or Caddy /rtc signaling fails, **rollback**.
 
-Caddy's `/rtc` proxy now reaches host-networked LiveKit using Docker's
-`host-gateway` mapping. Recreating Caddy briefly interrupts active sessions.
-Check LiveKit's observed **advertised ICE candidates** include the server's
-LAN IPv4 and the correct public IPv4; do not publish raw SDP or credentials.
+Always use both `-f` files when recreating media services in this mode.
 
-**Use the same two-file Compose invocation on subsequent upgrades and restarts.**
-Calling `docker compose up` without the override may revert the media topology.
-
-## Roll back
-
-```sh
+## Rollback (no Caddy restart)
+```bash
 cd /opt/novanexus
-docker compose -f docker-compose.yml -f docker-compose.media-host.yml stop livekit https
-docker compose -f docker-compose.yml up -d --no-deps --force-recreate livekit https
-docker compose ps
-curl -kfsS https://127.0.0.1/api/health
+docker compose -f docker-compose.yml -f docker-compose.media-host.yml stop livekit media-signaling-bridge
+docker compose -f docker-compose.yml up -d --no-deps --force-recreate livekit
+docker compose -f docker-compose.yml -f docker-compose.media-host.yml rm -sf media-signaling-bridge
+docker compose ps https livekit
+curl -kfsS https://192.168.0.52/api/health
 ```
+The bridge removal step targets only the opt-in internal proxy.
 
-Keep the `livekit.yaml` credentials and `rtc.use_external_ip` unchanged during
-this transition. If a public ICE address differs from your inbound-forwarded
-gateway, resolve that independently; never blindly pin a LAN IP as the only
-`node_ip`, which can disconnect remote callers.
-
-## TURN/TLS limitation
-
-Caddy listening on HTTPS/TCP 443 cannot turn HTTP traffic into TURN/TLS.
-On a *single public IP*, proper TURN/TLS on TCP 443 requires a dedicated
-TCP-layer SNI router (or separate public IP), a valid certificate for a TURN
-hostname, and an ingress path that bypasses Cloudflare's HTTP Tunnel. No
-automatic TURN/TLS enablement is claimed by this optional configuration.
+## Separate TURN/TLS requirement
+Cloudflare's standard HTTP Tunnel handles HTTPS and WSS signaling, **not**
+UDP media or TURN/TLS transport. Restricted corporate networks still need
+a separately reachable TLS TURN endpoint on TCP 443, which requires careful
+SNI routing or a second external IP. The host-media override does not enable
+TURN/TLS, and does not prove remote calls will succeed. Do not disable
+firewalls, replace the HTTPS listener, or expose an unauthenticated relay.
