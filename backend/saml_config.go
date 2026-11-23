@@ -26,7 +26,7 @@ func validSAMLProvider(entityID, loginURL, certificate string) bool {
  block,rest:=pem.Decode([]byte(certificate))
  // Accept exactly one signing certificate: silently ignoring a second PEM block
  // or trailing data makes the saved IdP trust anchor ambiguous.
- if block==nil||block.Type!="CERTIFICATE"||len(strings.TrimSpace(string(rest)))!=0 {return false}
+ if !strings.HasPrefix(certificate,"-----BEGIN CERTIFICATE-----") || block==nil || block.Type!="CERTIFICATE" || len(block.Headers)!=0 || len(strings.TrimSpace(string(rest)))!=0 {return false}
  cert,e:=x509.ParseCertificate(block.Bytes)
  if e!=nil||cert.PublicKey==nil{return false}
  // Do not allow obsolete IdP assertion-signing keys. This is only
