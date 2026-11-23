@@ -43,7 +43,7 @@ jobs:
           bash scripts/test-media-host.sh
           docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --quiet
           docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --format json |
-            python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; lk=s["livekit"]; assert lk.get("network_mode")=="host",lk; assert not lk.get("ports"),lk; assert not lk.get("networks"),lk; assert s["https"]["environment"]["LIVEKIT_SIGNALING_UPSTREAM"]=="host.docker.internal:7880"'
+            python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; lk=s["livekit"]; assert lk.get("network_mode")=="host",lk; assert not lk.get("ports"),lk; assert not lk.get("networks"),lk; assert "media-signaling-bridge" in s; assert s["https"]["environment"]["LIVEKIT_SIGNALING_UPSTREAM"]=="livekit:7880"; assert "https" not in s["media-signaling-bridge"].get("depends_on",{})'
           test -f Dockerfile
           test -f Caddyfile
           test -s public/nexus-workspace-logo.webp
@@ -131,6 +131,30 @@ jobs:
           sleep 4
           docker compose ps --status running livekit | grep -q livekit
           docker compose logs --tail=30 livekit
+      - name: Verify optional host-network signaling without recreating HTTPS
+        run: |
+          set -euo pipefail
+          https_before="$(docker inspect -f '{{.Id}}' novanexus-https-1)"
+          docker compose -f docker-compose.yml -f docker-compose.media-host.yml \
+            up -d --no-deps --force-recreate livekit media-signaling-bridge
+          test "$(docker inspect -f '{{.Id}}' novanexus-https-1)" = "$https_before"
+          docker compose -f docker-compose.yml -f docker-compose.media-host.yml ps --status running media-signaling-bridge | grep -q media-signaling-bridge
+          docker compose -f docker-compose.yml -f docker-compose.media-host.yml ps --status running livekit | grep -q livekit
+          # The bridged alias must respond on LiveKit's 7880 signaling socket.
+          connected=0
+          for attempt in $(seq 1 20); do
+            response="$(docker compose exec -T https wget -S -O /dev/null http://livekit:7880/ 2>&1 || true)"
+            if grep -Eq 'HTTP/[0-9.]+ (200|400|404)' <<< "$response"; then
+              connected=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$connected" -ne 1 ]; then
+            docker compose -f docker-compose.yml -f docker-compose.media-host.yml logs --tail=50 livekit media-signaling-bridge
+            exit 1
+          fi
+          curl -fkSs --noproxy '*' https://127.0.0.1/api/health | grep -q '"status":"ok"'
       - name: Diagnose single Cloudflare HTTPS origin on port 443
         run: |
           set -euo pipefail
