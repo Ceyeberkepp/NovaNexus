@@ -53,6 +53,27 @@ func TestSAMLRejectsExpiredFutureAndNonSigningCertificates(t *testing.T) {
  }
 }
 
+
+// Regression: a syntactically valid, currently valid X.509 certificate
+// must not authorize a weak RSA assertion-signing key.
+func TestSAMLRejectsWeakRSASigningCertificate(t *testing.T) {
+ key,e:=rsa.GenerateKey(rand.Reader,1024);if e!=nil{t.Fatal(e)}
+ now:=time.Now()
+ template:=&x509.Certificate{
+  SerialNumber:big.NewInt(321),
+  Subject:pkix.Name{CommonName:"Weak IdP"},
+  NotBefore:now.Add(-time.Hour),
+  NotAfter:now.Add(time.Hour),
+  KeyUsage:x509.KeyUsageDigitalSignature,
+ }
+ der,e:=x509.CreateCertificate(rand.Reader,template,template,&key.PublicKey,key)
+ if e!=nil{t.Fatal(e)}
+ cert:=string(pem.EncodeToMemory(&pem.Block{Type:"CERTIFICATE",Bytes:der}))
+ if validSAMLProvider("https://idp.example.com","https://idp.example.com/saml",cert) {
+  t.Fatal("1024-bit RSA IdP signing certificate accepted")
+ }
+}
+
 func TestSAMLSignInFailsClosed(t *testing.T) {
  s:=&Server{}
  req:=httptest.NewRequest(http.MethodGet,"/api/auth/saml/start",nil)
