@@ -290,12 +290,18 @@ func main() {
   p:=filepath.Clean(strings.TrimPrefix(r.URL.Path,"/"))
   full:=filepath.Join(dist,p);if !strings.HasPrefix(full,dist+string(os.PathSeparator)){http.NotFound(w,r);return}
   if st,e:=os.Stat(full);e==nil&&!st.IsDir(){
+   // Serve logo SVG files as an image with no HTML fallback or stale caching.
+   if p=="nexus-workspace-logo.svg" || p=="nexus-workspace-icon.svg" {
+    w.Header().Set("Content-Type","image/svg+xml")
+    w.Header().Set("Cache-Control","no-store")
+    http.ServeFile(w,r,full);return
+   }
    // Vite assets are content-hashed. A missing script must not silently
    // receive index.html with the wrong MIME type through a tunnel/cache.
    if strings.HasPrefix(r.URL.Path,"/assets/"){w.Header().Set("Cache-Control","public, max-age=31536000, immutable")}
    http.ServeFile(w,r,full);return
   }
-  if strings.HasPrefix(r.URL.Path,"/assets/")||strings.HasPrefix(r.URL.Path,"/src/")||strings.HasSuffix(p,".js")||strings.HasSuffix(p,".css")||strings.HasSuffix(p,".map"){
+  if strings.HasSuffix(p,".svg") || strings.HasPrefix(r.URL.Path,"/assets/")||strings.HasPrefix(r.URL.Path,"/src/")||strings.HasSuffix(p,".js")||strings.HasSuffix(p,".css")||strings.HasSuffix(p,".map"){
    w.Header().Set("Cache-Control","no-store")
    http.NotFound(w,r);return
   }

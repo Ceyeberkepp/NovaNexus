@@ -15,6 +15,9 @@ FROM alpine:3.24
 RUN addgroup -S nova && adduser -S -G nova nova && apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=frontend /app/dist ./dist
+# The Vite build may preserve restrictive 0600 permissions on tracked SVG files.
+# The server runs as nova, not root: permit read/traverse without granting write.
+RUN chmod -R a+rX /app/dist
 COPY --from=backend /novanexus /usr/local/bin/novanexus
 ENV NODE_ENV=production PORT=3000
 USER nova
