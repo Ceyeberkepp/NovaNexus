@@ -177,6 +177,9 @@ jobs:
           curl -fsS -b /tmp/nova-cookie2 -H "Content-Type: application/json" -d '{"name":"Test Group","description":"Integration"}' "$base/api/admin/groups" | grep -q id
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/groups" | grep -q "Test Group"
           curl -fsS -b /tmp/nova-cookie2 "$base/api/admin/logs" | grep -q settings.updated
+      - name: Verify default Nexus branding paths
+        run: |
+          node -e "const fs=require('fs');const b=fs.readFileSync('backend/branding.go','utf8');for(const p of ['/nexus-workspace-logo.svg','/nexus-workspace-icon.svg'])if(!b.includes(p))throw Error('Missing default '+p)"
       - name: Verify persistent branding assets and validation
         run: |
           set -euo pipefail

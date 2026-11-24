@@ -9,11 +9,25 @@ import (
 
 func publicBrandingAPI(s *Server,w http.ResponseWriter,r *http.Request){
  if r.Method!="GET"{fail(w,405,"Method not allowed");return}
- values:=map[string]string{"workspace_name":"NovaNexus Workspace"}
+ values:=map[string]string{
+  "workspace_name":"NovaNexus Workspace",
+  "site_logo":"/nexus-workspace-logo.svg",
+  "login_logo":"/nexus-workspace-logo.svg",
+  "waiting_logo":"/nexus-workspace-logo.svg",
+  "favicon":"/nexus-workspace-icon.svg",
+ }
  rows,e:=s.db.Query(r.Context(),"SELECT name,value FROM app_settings WHERE name IN ('workspace_name','site_logo','login_logo','favicon','waiting_logo')")
  if e!=nil{fail(w,500,"Branding unavailable");return}
  defer rows.Close()
- for rows.Next(){var key,val string;if rows.Scan(&key,&val)==nil{values[key]=val}}
+ for rows.Next(){var key,val string;if rows.Scan(&key,&val)==nil{
+   // Empty admin branding values mean "use default", not a blank image.
+   // Migrate only literal references to the old bundled default artwork;
+   // preserve administrator-uploaded data: images without modification.
+   if val=="" || val=="/nexus-workspace-logo.webp" || val=="nexus-workspace-logo.webp" {
+     continue
+   }
+   values[key]=val
+  }}
  if rows.Err()!=nil{fail(w,500,"Branding unavailable");return}
  respond(w,200,map[string]any{"branding":values})
 }
