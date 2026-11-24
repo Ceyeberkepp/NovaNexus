@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import MeetingRoom from './MeetingRoom';
 import {liveKitSignalingOrigin} from './meeting-origin.mjs';
 import CallNotifications from './CallNotifications';
+import {usePresence} from './usePresence';
+import {PresenceBadge,PresenceSelect} from './PresenceBadge';
 import CallsPanel from './CallsPanel';
 import AdminConsole from './AdminConsole';
 import AccountSecurity from './AccountSecurity';
@@ -1212,7 +1214,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
                 {isUser ? (
                     <>
                     <UserAvatar name={item.name} src={item.avatar} className="w-10 h-10 text-[10px]" />
-                    {prefs.showPresence&&item.status&&<div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${item.status === 'online' ? 'bg-green-500' : item.status === 'busy' ? 'bg-red-500' : 'bg-slate-300'}`}></div>}
+                    {prefs.showPresence&&<PresenceBadge status={item.status||'offline'} className="absolute bottom-0 right-0"/>}
                     </>
                 ) : (
                     <div className="w-10 h-10 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center text-[10px] font-bold border border-slate-100 shrink-0">
@@ -1222,7 +1224,7 @@ const Messenger = ({ startMeeting, users, currentUser }) => {
             </div>
             <div className="ml-3 hidden md:block overflow-hidden">
                 <span className="text-[12px] font-bold block text-slate-800 truncate">{isUser&&prefs.nameDisplay==='email'?item.email:item.name}</span>
-                <span className="text-[10px] text-slate-400 font-medium truncate capitalize">{isUser ? item.role : `${item.members.length} members`}</span>
+                <span className="text-[10px] text-slate-400 font-medium truncate capitalize">{isUser ? `${item.status||'offline'} · ${item.role}` : `${item.members.length} members`}</span>
             </div>
         </div>
     );
@@ -1891,6 +1893,8 @@ function App() {
   const [meetingOptions,setMeetingOptions]=useState({autoJoin:false,audioOnly:false,callId:null});
   const [guestConnection,setGuestConnection]=useState(null);
   const [users, setUsers] = useState([]);
+  const {presence,setStatus} = usePresence(user);
+  const usersWithPresence=users.map(member=>({...member,status:presence[String(member.id)]||'offline'}));
   const [authLoading, setAuthLoading] = useState(true);
   const [workspaceName,setWorkspaceName] = useState('NovaNexus Workspace');
   const [siteLogo,setSiteLogo] = useState('/nexus-workspace-logo.webp');
@@ -2071,9 +2075,10 @@ function App() {
                     Nexus
                 </div>
                 <div className="hidden md:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3 sm:gap-6">
+                    <PresenceSelect status={presence[String(user?.id)]||'offline'} onChange={setStatus}/>
                     <button type="button" aria-label="Open my profile" onClick={() => setShowProfile(true)} className="flex items-center gap-3 bg-white pl-1.5 pr-4 py-1.5 rounded-full border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
-                        <UserAvatar name={user?.name} src={user?.avatar} className="w-7 h-7"/>
+                        <span className="relative"><UserAvatar name={user?.name} src={user?.avatar} className="w-7 h-7"/><PresenceBadge status={presence[String(user?.id)]||'offline'} size="xs" className="absolute -bottom-1 -right-1"/></span>
                         <span className="text-[10px] font-black uppercase text-slate-700 group-hover:text-indigo-600 transition-colors hidden sm:block">{user?.name}</span>
                     </button>
                 </div>
@@ -2151,7 +2156,7 @@ function App() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {users.slice(0, 5).map(u => (
+                                        {usersWithPresence.slice(0, 5).map(u => (
                                             <tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
                                                 <td className="px-8 py-5">
                                                     <div className="flex items-center gap-4">
@@ -2167,7 +2172,7 @@ function App() {
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex items-center justify-end gap-3">
-                                                        <span className="text-[10px] font-medium text-slate-400">Member</span>
+                                                        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-500"><PresenceBadge status={u.status||'offline'} size="xs"/>{u.status||'offline'}</span>
                                                         <button aria-label={'Call '+u.name} onClick={()=>window.dispatchEvent(new CustomEvent('novanexus:call',{detail:{recipientId:u.id,name:u.name,audioOnly:true}}))} className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100">
                                                             <Phone size={14}/>
                                                         </button>
@@ -2182,8 +2187,8 @@ function App() {
                         </div>
                     </div>
                 )}
-                {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={users} currentUser={user} />}
-                {currentTab === 'calls' && <CallsPanel user={user} users={users} />}
+                {currentTab === 'chats' && <Messenger startMeeting={startMeeting} users={usersWithPresence} currentUser={user} />}
+                {currentTab === 'calls' && <CallsPanel user={user} users={usersWithPresence} />}
                 {currentTab === 'security' && <AccountSecurity user={user} />}
                 {currentTab === 'schedule' && <SchedulePanel startMeeting={startMeeting} />}
                 {currentTab === 'ai' && <WorkspaceAssistant />}
