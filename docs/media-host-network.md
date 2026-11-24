@@ -32,6 +32,17 @@ available after removing the old LiveKit container. Nested LXC must support
 Docker host networking. If validation fails, stop; do not change Caddy.
 
 ## Activate (short LiveKit call interruption, no Caddy restart)
+
+For an existing installation already updated to this commit, use the guarded activation script:
+
+```bash
+cd /opt/novanexus
+bash scripts/activate-media-host.sh
+```
+
+The script validates Compose, records the running HTTPS container identity, activates only LiveKit and the internal signaling bridge, and rolls back media services on failure. It does not modify or restart Cloudflare Tunnel or Caddy. A real two-device call is still necessary after the command.
+
+Manual activation (if deliberately not using the guarded script):
 ```bash
 cd /opt/novanexus
 docker compose -f docker-compose.yml -f docker-compose.media-host.yml \
