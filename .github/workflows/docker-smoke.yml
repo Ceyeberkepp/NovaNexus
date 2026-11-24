@@ -46,9 +46,9 @@ jobs:
             python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; lk=s["livekit"]; assert lk.get("network_mode")=="host",lk; assert not lk.get("ports"),lk; assert not lk.get("networks"),lk; assert "media-signaling-bridge" in s; assert s["https"]["environment"]["LIVEKIT_SIGNALING_UPSTREAM"]=="livekit:7880"; assert "https" not in s["media-signaling-bridge"].get("depends_on",{})'
           test -f Dockerfile
           test -f Caddyfile
-          test -s public/nexus-workspace-logo.webp
-          grep -q "/nexus-workspace-logo.webp" index.html
-          grep -q "/nexus-workspace-logo.webp" src/App.jsx
+          test -s public/nexus-workspace-logo.svg
+          grep -q "/nexus-workspace-logo.svg" index.html
+          grep -q "/nexus-workspace-logo.svg" src/App.jsx
       - name: Build non-root Go API image
         run: docker compose build app
       - name: Start PostgreSQL and Go API

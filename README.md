@@ -1,8 +1,8 @@
-<p align="center"><img src="public/nexus-workspace-logo.webp" alt="Nexus Workspace by Nova" width="720" /></p>
+<p align="center"><img src="public/nexus-workspace-logo.svg" alt="Nexus Workspace by Nova" width="720" /></p>
 
 # Nexus Workspace by Nova
 
-The original Nexus Workspace by Nova artwork is the default branding for the installer, login, app sidebar, browser icon and startup page. Administrators can still replace it using Branding settings.
+The redesigned purple-and-white Nexus Workspace SVG is the default branding for the login, app sidebar, browser icon and startup page. It keeps the existing color palette with a simpler curved N and a compact favicon. Administrators can still replace the branding from the web GUI; saved custom branding takes precedence.
 
 ---
 
