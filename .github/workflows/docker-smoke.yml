@@ -49,6 +49,8 @@ jobs:
           test -s public/nexus-workspace-logo.svg
           grep -q "/nexus-workspace-logo.svg" index.html
           grep -q "/nexus-workspace-logo.svg" src/App.jsx
+      - name: Simulate restricted logo permissions seen on the deployed server
+        run: chmod 600 public/nexus-workspace-logo.svg public/nexus-workspace-icon.svg
       - name: Build non-root Go API image
         run: docker compose build app
       - name: Start PostgreSQL and Go API
