@@ -1,4 +1,4 @@
-<p align="center"><img src="public/nexus-workspace-logo.webp" alt="Nexus Workspace by Nova" width="720" /></p>
+<p align="center"><img src="public/nexus-workspace-logo.svg" alt="Nexus Workspace by Nova" width="720" /></p>
 
 # Nexus Workspace by Nova
 
