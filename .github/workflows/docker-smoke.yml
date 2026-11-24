@@ -75,6 +75,14 @@ jobs:
           set -euo pipefail
           docker compose exec -T app wget -qO- http://127.0.0.1:3000/ | grep -q 'nova-startup'
           docker compose exec -T app wget -qO- http://127.0.0.1:3000/boot-health.js | grep -q 'could not load'
+          docker compose exec -T app test -s /app/dist/nexus-workspace-logo.svg
+          docker compose exec -T app test -s /app/dist/nexus-workspace-icon.svg
+          docker compose exec -T app wget -qO- http://127.0.0.1:3000/nexus-workspace-logo.svg | grep -q '<svg'
+          docker compose exec -T app wget -qO- http://127.0.0.1:3000/nexus-workspace-icon.svg | grep -q '<svg'
+          svg_headers=$(docker compose exec -T app wget -S -O /dev/null http://127.0.0.1:3000/nexus-workspace-logo.svg 2>&1)
+          grep -qi 'Content-Type: image/svg+xml' <<< "$svg_headers"
+          missing_logo=$(docker compose exec -T app wget -S -O /dev/null http://127.0.0.1:3000/missing-brand.svg 2>&1 || true)
+          grep -q '404' <<< "$missing_logo"
           response=$(docker compose exec -T app wget -S -O /dev/null http://127.0.0.1:3000/assets/missing-file.js 2>&1 || true)
           printf '%s' "$response" | grep -q '404'
       - name: Verify IP-only HTTPS with local CA
