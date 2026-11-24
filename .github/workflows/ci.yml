@@ -38,7 +38,7 @@ jobs:
           go-version: "1.26"
       - name: Verify installer port detection
         run: |
-          bash -n scripts/install.sh
+          bash -n scripts/install.sh scripts/activate-media-host.sh
           bash scripts/test-port-detection.sh
           bash scripts/test-media-fallback.sh
           bash scripts/test-media-host.sh
