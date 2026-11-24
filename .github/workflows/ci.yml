@@ -105,6 +105,19 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"version":"invalid","accept":true}' "$base/api/terms")" = "400"
           curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d "{\"version\":\"$version\",\"accept\":true}" "$base/api/terms" | grep -q '"terms_required":false'
           curl --fail --silent -b /tmp/nova-cookie2 "$base/api/users" | grep -q '"users"'
+      - name: Verify authenticated presence and user-controlled availability
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:3000
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/presence")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"mode":"busy","idle":false}' "$base/api/presence")" = "401"
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"mode":"busy","idle":false}' "$base/api/presence" | grep -q '"ok":true'
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/presence" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["presence"]["1"]=="busy",d'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"idle":true}' "$base/api/presence" | grep -q '"ok":true'
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/presence" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["presence"]["1"]=="busy",d'
+          curl -fsS -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"mode":"available","idle":true}' "$base/api/presence" | grep -q '"ok":true'
+          curl -fsS -b /tmp/nova-cookie2 "$base/api/presence" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["presence"]["1"]=="away",d'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/nova-cookie2 -H 'Content-Type: application/json' -d '{"mode":"invalid","idle":false}' "$base/api/presence")" = "400"
       - name: Verify eight-character passwords, persisted calendar and direct messages
         run: |
           set -euo pipefail
