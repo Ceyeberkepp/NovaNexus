@@ -88,6 +88,7 @@ NOVANEXUS_HTTP_PORT=${NOVANEXUS_HTTP_PORT:-}
 NOVANEXUS_MEDIA_MODE=${NOVANEXUS_MEDIA_MODE:-}
 # Optional explicitly forwarded public IPv4; leave unset to preserve STUN discovery.
 NOVANEXUS_MEDIA_PUBLIC_IP=${NOVANEXUS_MEDIA_PUBLIC_IP:-}
+NOVANEXUS_MEDIA_INTERFACE=${NOVANEXUS_MEDIA_INTERFACE:-}
 LAN_IP=$(detect_ipv4 || true)
 if [[ "$RESUME_INSTALL" == 1 ]]; then
   NOVANEXUS_DOMAIN=$(sed -n 's/^NOVANEXUS_DOMAIN=//p' "$ROOT_DIR/.env" | head -n1)
@@ -110,6 +111,9 @@ if [[ "$RESUME_INSTALL" == 1 ]]; then
   fi
   if [[ -z "$NOVANEXUS_MEDIA_PUBLIC_IP" ]]; then
     NOVANEXUS_MEDIA_PUBLIC_IP=$(sed -n 's/^NOVANEXUS_MEDIA_PUBLIC_IP=//p' "$ROOT_DIR/.env" | head -n1)
+  fi
+  if [[ -z "$NOVANEXUS_MEDIA_INTERFACE" ]]; then
+    NOVANEXUS_MEDIA_INTERFACE=$(sed -n 's/^NOVANEXUS_MEDIA_INTERFACE=//p' "$ROOT_DIR/.env" | head -n1)
   fi
 elif [[ -z "$NOVANEXUS_DOMAIN" ]]; then
   NOVANEXUS_DOMAIN=$(detect_ipv4 || true)
@@ -155,7 +159,7 @@ fi
 
 log "Installing any missing system dependencies"
 needed=()
-for package in git curl ca-certificates openssl iproute2; do
+for package in git curl ca-certificates openssl iproute2 python3; do
   if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx "install ok installed"; then needed+=("$package"); fi
 done
 if (( ${#needed[@]} )); then
@@ -321,7 +325,24 @@ sed -i '/^NOVANEXUS_MEDIA_PUBLIC_IP=/d' .env
 if [[ -n "$NOVANEXUS_MEDIA_PUBLIC_IP" ]]; then
   printf 'NOVANEXUS_MEDIA_PUBLIC_IP=%s\n' "$NOVANEXUS_MEDIA_PUBLIC_IP" >> .env
 fi
-log "LiveKit media mode: $NOVANEXUS_MEDIA_MODE"
+# Bind LiveKit to the real outbound LAN interface, never docker0/bridge.
+# This prevents STUN selecting 172.17.x.x as the external-IP mapping.
+if [[ -z "$NOVANEXUS_MEDIA_INTERFACE" ]]; then
+  NOVANEXUS_MEDIA_INTERFACE=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\) .*/\1/p' | head -n1)
+fi
+[[ "$NOVANEXUS_MEDIA_INTERFACE" =~ ^[a-zA-Z0-9_.:-]{1,32}$ ]] ||
+  fail "Cannot detect the physical LAN media interface; supply NOVANEXUS_MEDIA_INTERFACE."
+case "$NOVANEXUS_MEDIA_INTERFACE" in
+  docker*|br-*|veth*|lo) fail "Media interface $NOVANEXUS_MEDIA_INTERFACE is not a usable LAN interface.";;
+esac
+MEDIA_LAN_IP=$(ip -4 -o addr show dev "$NOVANEXUS_MEDIA_INTERFACE" scope global |
+  awk 'NR==1 {split($4,p,"/"); print p[1]}')
+valid_ipv4 "$MEDIA_LAN_IP" || fail "Interface $NOVANEXUS_MEDIA_INTERFACE has no usable IPv4 address."
+sed -i '/^NOVANEXUS_MEDIA_INTERFACE=/d' .env
+printf 'NOVANEXUS_MEDIA_INTERFACE=%s\n' "$NOVANEXUS_MEDIA_INTERFACE" >> .env
+chmod 600 .env
+log "LiveKit media mode: $NOVANEXUS_MEDIA_MODE; ICE interface: $NOVANEXUS_MEDIA_INTERFACE ($MEDIA_LAN_IP)"
+
 if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   # Nested LXC -> Docker and home NAT commonly cannot self-ping the public
   # IP, even when it is actually reachable from 5G clients. Keep STUN public
@@ -349,12 +370,21 @@ if [[ "$PUBLIC_MEDIA" == 1 ]]; then
   udp_port: 3478'
 else
   MEDIA_RTC_CONFIG="  use_external_ip: false
-  node_ip: $NOVANEXUS_DOMAIN"
+  node_ip: $MEDIA_LAN_IP"
   MEDIA_TURN_CONFIG=""
 fi
-cat >livekit.yaml <<LIVEKIT_CONFIGURATION
+if [[ "$RESUME_INSTALL" == 1 && -s livekit.yaml ]]; then
+  log "Preserving existing LiveKit YAML and ICE credentials on upgrade."
+  if ! grep -q '^[[:space:]]*interfaces:' livekit.yaml; then
+    log "WARNING: Existing LiveKit lacks a LAN interface filter. Run bash scripts/repair-media-ice.sh after upgrade."
+  fi
+else
+  cat >livekit.yaml <<LIVEKIT_CONFIGURATION
 port: 7880
 rtc:
+  interfaces:
+    includes:
+      - $NOVANEXUS_MEDIA_INTERFACE
   tcp_port: 7881
   udp_port: 7882
 $MEDIA_RTC_CONFIG
@@ -364,7 +394,8 @@ $MEDIA_TURN_CONFIG
 keys:
   "$LIVEKIT_KEY": "$LIVEKIT_SECRET"
 LIVEKIT_CONFIGURATION
-chmod 600 livekit.yaml
+  chmod 600 livekit.yaml
+fi
 # The shared Caddyfile serves the primary address. Generate a second HTTPS
 # site when LAN IP + public hostname must coexist. Nothing is exposed on HTTP
 # beyond Caddy's redirect and certificate challenge handling.
@@ -395,37 +426,47 @@ if [[ "$TLS_MODE" == internal ]]; then
     sed -i '/^{$NOVANEXUS_DOMAIN} {/a\    tls internal' Caddyfile
   fi
 fi
-log "Building Go API and React frontend and starting PostgreSQL, HTTPS and video media service"
-docker compose config --quiet
+# Use the verified host-network LiveKit + private signaling bridge topology for
+# new installations. Preserve the existing public Caddy /rtc endpoint.
+compose(){ docker compose -f docker-compose.yml -f docker-compose.media-host.yml "$@"; }
+log "Building Go API and React frontend and starting PostgreSQL, HTTPS and host-networked media service"
+compose config --quiet
+compose config --format json | python3 -c '
+import json,sys
+s=json.load(sys.stdin)["services"]
+assert s["livekit"].get("network_mode") == "host"
+assert not s["livekit"].get("ports")
+assert "media-signaling-bridge" in s
+' || fail "Host-media Docker configuration is not valid."
 if [[ "$RESUME_INSTALL" == 0 || "$SOURCE_UPDATED" == 1 ]]; then
-  docker compose build --pull app
+  compose build --pull app
 else
   # A verification retry should not rebuild an already running application.
-  if ! docker compose images -q app 2>/dev/null | grep -q .; then
+  if ! compose images -q app 2>/dev/null | grep -q .; then
     log "No existing application image found; building it now."
-    docker compose build --pull app
+    compose build --pull app
   else
     log "Reusing the existing application image and database."
   fi
 fi
-docker compose up -d --wait --wait-timeout 240
+compose up -d --wait --wait-timeout 240
 log "Setting up the built-in local AI assistant (small starter model)"
-if docker compose exec -T ollama ollama list 2>/dev/null | grep -Fq "qwen2.5:0.5b"; then
+if compose exec -T ollama ollama list 2>/dev/null | grep -Fq "qwen2.5:0.5b"; then
   log "Starter AI model is already installed."
-elif docker compose exec -T ollama ollama pull qwen2.5:0.5b; then
+elif compose exec -T ollama ollama pull qwen2.5:0.5b; then
   log "Local AI assistant model is ready."
 else
   log "WARNING: AI model download did not complete. Other NovaNexus services remain available; AI can be retried later."
 fi
 # Bind-mounted Caddyfile updates do not automatically restart a healthy proxy.
-docker compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail "Invalid HTTPS proxy configuration."
-docker compose restart https >/dev/null || fail "Could not restart HTTPS proxy with updated configuration."
+compose exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null || fail "Invalid HTTPS proxy configuration."
+compose restart https >/dev/null || fail "Could not restart HTTPS proxy with updated configuration."
 log "Checking HTTPS certificate and application health"
 CURL_CA=()
 # The same primary HTTPS listener serves local browsers and Cloudflare.
 # Export the internal CA for locally issued IP certificates.
 CA_FILE="$ROOT_DIR/novanexus-local-root-ca.crt"
-docker compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
+compose exec -T https cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE" || fail "Cannot export local HTTPS root certificate."
 chmod 644 "$CA_FILE"
 if [[ "$TLS_MODE" == internal ]]; then
   CURL_CA=(--cacert "$CA_FILE")
@@ -448,7 +489,7 @@ for attempt in $(seq 1 24); do
   sleep 2
 done
 if [[ "$verified" != true ]]; then
-  docker compose logs --tail=60 https app db >&2 || true
+  compose logs --tail=60 https app db >&2 || true
   fail "Local HTTPS health verification failed. Proxy settings, certificate mismatch or application health may be responsible; inspect the error above."
 fi
 # A local loopback request verifies that Caddy can present a publicly trusted
