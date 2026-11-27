@@ -75,3 +75,35 @@ a separately reachable TLS TURN endpoint on TCP 443, which requires careful
 SNI routing or a second external IP. The host-media override does not enable
 TURN/TLS, and does not prove remote calls will succeed. Do not disable
 firewalls, replace the HTTPS listener, or expose an unauthenticated relay.
+
+
+## Fix Docker bridge ICE candidates after host-network activation
+
+On a host with Docker bridge interfaces, LiveKit can incorrectly associate the public STUN
+address with `172.17.0.1` rather than the real LAN interface. The Windows browser then
+has no reachable candidate pair even though HTTPS signaling returns success. This
+deployment's observed correct LAN address is `192.168.0.52` on `eth0`, but the
+repair script detects the current address rather than hardcoding it.
+
+After the guarded host activation has completed, run:
+
+```bash
+cd /opt/novanexus
+bash scripts/repair-media-ice.sh
+```
+
+The script requires Python 3, iproute2, and Docker Compose. It:
+
+- Detects the current IPv4 address on `eth0` (override with `NOVANEXUS_MEDIA_INTERFACE`).
+- Refuses ambiguous YAML or a pre-existing RTC interface filter rather than overwriting custom settings.
+- Saves a root-only backup of the existing `livekit.yaml` with its existing credentials.
+- Adds only `rtc.interfaces.includes: [eth0]` and recreates the **LiveKit container only** using **both** Compose files.
+- Verifies a real LiveKit startup log contains no additional private Docker-bridge candidates, that signaling is still reachable, and that the existing HTTPS container identity remains unchanged.
+- Restores the backed-up YAML and recreates host-networked LiveKit if any verification fails.
+
+Do not run the installer to apply this change: it regenerates runtime configuration.
+Do not restart Caddy or the Cloudflare Tunnel.
+
+The repair removes incorrect local Docker candidates. It does **not** punch holes
+through the gateway, solve blocked remote UDP/TCP, or provide TURN/TLS on TCP 443.
+A real two-party media call and the firewall/port-forward path still need testing.
