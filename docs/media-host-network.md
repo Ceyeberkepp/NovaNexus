@@ -107,3 +107,39 @@ Do not restart Caddy or the Cloudflare Tunnel.
 The repair removes incorrect local Docker candidates. It does **not** punch holes
 through the gateway, solve blocked remote UDP/TCP, or provide TURN/TLS on TCP 443.
 A real two-party media call and the firewall/port-forward path still need testing.
+
+
+## Default configuration for NEW installations (from November 2026 onward)
+
+The one-click installer now starts LiveKit in **host network mode** with a private
+`media-signaling-bridge` in the Docker backend network. The main Caddy HTTPS
+listener still proxies `/rtc` to `livekit:7880`, which resolves to the signaling
+bridge; the bridge forwards signaling to the host-networked LiveKit process.
+
+The installer detects the default-route interface (for example `eth0`) and
+writes `rtc.interfaces.includes` to the generated LiveKit configuration. It
+uses the detected LAN IPv4 for LAN-only mode and maintains external IP discovery
+for public media mode. This prevents `docker0` or `br-*` addresses from being
+advertised as direct media candidates.
+
+Installer-generated YAML is only created on a new installation or when the
+runtime file is missing. Upgrades preserve an existing `livekit.yaml` instead
+of undoing working custom ICE settings. Do not rerun the installer on a
+customized live deployment solely to upgrade media: it can regenerate other
+runtime site files. Use `scripts/repair-media-ice.sh` for an existing
+host-network installation that still advertises Docker bridge IPs.
+
+For future lifecycle commands, always use both Compose files:
+
+```bash
+cd /opt/novanexus
+docker compose -f docker-compose.yml -f docker-compose.media-host.yml ps
+docker compose -f docker-compose.yml -f docker-compose.media-host.yml up -d --no-deps livekit media-signaling-bridge
+```
+
+**Important:** The automatically selected LAN interface fixes candidate
+enumeration. Public internet calls additionally require inbound UDP 7882,
+TCP 7881, TURN UDP 3478, or a separate reachable authenticated TURN relay.
+Cloudflare's HTTP Tunnel does not transport those media packets. This means
+a single installer can configure the known-good media topology without
+guaranteeing end-to-end access on every firewall or network.

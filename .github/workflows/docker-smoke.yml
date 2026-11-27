@@ -43,6 +43,14 @@ jobs:
           bash scripts/test-media-host.sh
           python3 scripts/test-media-ice-interface.py
           bash -n scripts/repair-media-ice.sh
+          # Fresh installs must use the working host-network mode by default.
+          grep -Fq 'compose(){ docker compose -f docker-compose.yml -f docker-compose.media-host.yml "$@"; }' scripts/install.sh
+          grep -Fq 'compose up -d --wait --wait-timeout 240' scripts/install.sh
+          grep -Fq '      - $NOVANEXUS_MEDIA_INTERFACE' scripts/install.sh
+          grep -Fq 'node_ip: $MEDIA_LAN_IP' scripts/install.sh
+          grep -Fq 'python3;' scripts/install.sh || grep -Fq 'iproute2 python3;' scripts/install.sh
+          grep -Fq 'Preserving existing LiveKit YAML and ICE credentials' scripts/install.sh
+          ! grep -Fq 'docker compose up -d --wait --wait-timeout 240' scripts/install.sh
           docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --quiet
           docker compose -f docker-compose.yml -f docker-compose.media-host.yml config --format json |
             python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; lk=s["livekit"]; assert lk.get("network_mode")=="host",lk; assert not lk.get("ports"),lk; assert not lk.get("networks"),lk; assert "media-signaling-bridge" in s; assert s["https"]["environment"]["LIVEKIT_SIGNALING_UPSTREAM"]=="livekit:7880"; assert "https" not in s["media-signaling-bridge"].get("depends_on",{})'
