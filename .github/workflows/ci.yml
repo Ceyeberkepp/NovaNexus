@@ -46,6 +46,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run check
+      - name: Test screen-share priority and active speaker stage selection
+        run: node src/meeting-stage.test.mjs
       - name: Verify local and Cloudflare call signaling origins
         run: node --test tests/meeting-origin.test.mjs
       - name: Test meeting camera publication and remote subscription diagnostics
