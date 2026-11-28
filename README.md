@@ -31,6 +31,13 @@ The permanent default was merged to `main` in PR #65 (commit `2fd9b14`). New ins
 
 **Scope:** This is a confirmed working Windows/iPhone deployment, not a guarantee that every public network works. External users may still require actual WAN port forwarding or a reachable authenticated TURN/TLS relay. Cloudflare HTTP Tunnel handles HTTPS/WSS signaling, not UDP media.
 
+## Mobile call speakerphone/audio output
+
+- The in-call mobile toolbar includes **Call audio output**. Browsers exposing the Audio Output Devices API can choose an available speaker, Bluetooth headset, or system-default output via the LiveKit room audio-output switch.
+- iPhone/iOS Safari does **not** provide a reliable web API to force the phone speakerphone/earpiece route. Nexus displays system audio-routing guidance instead of a misleading switch; the iOS system controls this path. Connected Bluetooth/audio devices may be available through iOS Control Center.
+- Nexus never changes the remote participant’s output or requests microphone permissions just to pretend to enable speakerphone. Mobile audio routing is subject to browser capabilities, audio permissions, and OS output settings.
+- The meeting stage's LiveKit active-speaker event state is initialized and updated during meetings.
+
 ## Video meeting stage and consent-based control
 
 - A live shared screen automatically becomes the primary stage; participant cameras remain in a thumbnail filmstrip.
