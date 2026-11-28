@@ -48,7 +48,7 @@ export default function ConferenceStage({roomId,onEnd}){
        {stage.mode==='screen'&&<div className="nexus-primary-stage" aria-label="Shared screen in main view">
          {stage.main?<ParticipantTile key={`${stage.main.participant?.identity||'participant'}:${stage.main.source}`} trackRef={stage.main}/>:<div className="nexus-stage-empty">Waiting for participants to connect…</div>}
          <div className="nexus-stage-mode-label">Screen sharing</div>
-       </div>}}
+       </div>}
        {stage.filmstrip.length>0&&<div className={stage.mode==='grid'?'nexus-camera-grid':'nexus-stage-filmstrip'} aria-label="Participant cameras">
          {stage.filmstrip.map(track=><div className={stage.mode==='grid'?'nexus-camera-grid-tile':'nexus-stage-thumbnail'} key={`${track.participant?.identity||track.participant?.sid||'participant'}:${track.source}`}><ParticipantTile trackRef={track}/></div>)}
        </div>}
