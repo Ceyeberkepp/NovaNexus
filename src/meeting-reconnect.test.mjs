@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {mayStartJoin,acceptJoinResponse,recoveryDelayMs} from './meeting-reconnect.mjs';
+assert.equal(mayStartJoin({active:true,inFlight:false}),true);
+assert.equal(mayStartJoin({active:true,inFlight:true}),false);
+assert.equal(mayStartJoin({active:false,inFlight:false}),false);
+assert.equal(acceptJoinResponse({active:true,requestEpoch:3,currentEpoch:3}),true);
+assert.equal(acceptJoinResponse({active:true,requestEpoch:2,currentEpoch:3}),false);
+assert.equal(acceptJoinResponse({active:false,requestEpoch:3,currentEpoch:3}),false);
+assert.equal(recoveryDelayMs(1),2500);
+assert.equal(recoveryDelayMs(2),5000);
+assert.equal(recoveryDelayMs(100),5000);
+console.log('Meeting reconnect single-flight, stale-token and backoff tests passed.');
