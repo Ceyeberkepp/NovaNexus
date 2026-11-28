@@ -4,6 +4,7 @@ import {Track,RoomEvent} from 'livekit-client';
 import {Mic,Video,MonitorUp,MessageCircle,Users,MoreVertical,PhoneOff,Disc,X,Grid2X2,Activity} from 'lucide-react';
 import MeetingDiagnostics from './MeetingDiagnostics';
 import {selectStage} from './meeting-stage.mjs';
+import MobileAudioOutput from './MobileAudioOutput';
 import './conference.css';
 
 // All participant tiles come from authenticated LiveKit tracks, never demo state.
@@ -12,8 +13,15 @@ export default function ConferenceStage({roomId,onEnd}){
  const tracks=useTracks([{source:Track.Source.Camera,withPlaceholder:true},{source:Track.Source.ScreenShare,withPlaceholder:false}]);
  const participants=useParticipants();
  const [drawer,setDrawer]=useState('');
- const [layout,setLayout]=useState('grid');
+ const [activeSpeakers,setActiveSpeakers]=useState(()=>room.activeSpeakers||[]);
  const [showDiagnostics,setShowDiagnostics]=useState(false);
+ useEffect(()=>{
+   const onSpeakers=speakers=>setActiveSpeakers([...(speakers||[])]);
+   room.on(RoomEvent.ActiveSpeakersChanged,onSpeakers);
+   setActiveSpeakers([...(room.activeSpeakers||[])]);
+   return()=>room.off(RoomEvent.ActiveSpeakersChanged,onSpeakers);
+ },[room]);
+ const stage=selectStage(tracks,activeSpeakers,Track.Source.ScreenShare,Track.Source.Camera);
  const label=roomId||'Meeting';
  const leave=async()=>{try{await room.disconnect()}finally{onEnd?.()}};
  return <div className="nexus-conference-stage" data-lk-theme="default">
@@ -39,6 +47,7 @@ export default function ConferenceStage({roomId,onEnd}){
      <TrackToggle source={Track.Source.Microphone} showIcon={true} aria-label="Toggle microphone" className="nexus-meeting-control"/>
      <TrackToggle source={Track.Source.Camera} showIcon={true} aria-label="Toggle camera" className="nexus-meeting-control"/>
      <TrackToggle source={Track.Source.ScreenShare} showIcon={true} aria-label="Share screen" className="nexus-meeting-control"/>
+     <MobileAudioOutput/>
      <span className="nexus-stage-toolbar-label" aria-live="polite">{stage.mode==='screen'?'Presenting screen':'Active speaker'}</span>
      <button aria-label="Call health and media diagnostics" title="Call health" aria-pressed={showDiagnostics} className={"nexus-meeting-control "+(showDiagnostics?"nexus-active":"")} onClick={()=>setShowDiagnostics(v=>!v)}><Activity size={18}/></button>
      <span className="nexus-control-divider"/>
