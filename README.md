@@ -21,6 +21,22 @@ NovaNexus is being built as a secure, self-hosted environment for teams and admi
 
 > **Development status:** NovaNexus is **not yet production-ready**. The imported React workspace contains prototype features. Direct messaging, personal calendar events, and LiveKit-based video meeting integration now have initial implementations. Some group messaging and guest flows remain development-preview. Authenticator-app TOTP MFA and recovery codes have an implementation, but require deployment-specific verification. MCP, parts of administration, and validated high-capacity or cross-network media deployment remain unfinished.
 
+## Confirmed Windows/iPhone video repair and new-install default
+
+On 2026-11-27, the self-hosted Nexus Workspace installation was tested with a real Windows laptop and iPhone and the user confirmed the video call worked after both changes:
+1. LiveKit moved to host networking with the internal `media-signaling-bridge`, preserving Caddy and Cloudflare Tunnel.
+2. LiveKit `rtc.interfaces.includes` restricted ICE discovery to the actual LAN interface (`eth0` in that deployment) rather than Docker bridge addresses (`docker0` or `br-*`). The working deployment reported `192.168.0.52` as its LAN interface.
+
+The permanent default was merged to `main` in PR #65 (commit `2fd9b14`). New installations select the default-route interface, generate the restricted ICE configuration, and use host-network LiveKit with a private signaling bridge. Upgrades preserve existing media credentials and `livekit.yaml`. See [the host-media deployment guide](docs/media-host-network.md).
+
+**Scope:** This is a confirmed working Windows/iPhone deployment, not a guarantee that every public network works. External users may still require actual WAN port forwarding or a reachable authenticated TURN/TLS relay. Cloudflare HTTP Tunnel handles HTTPS/WSS signaling, not UDP media.
+
+## Video meeting stage and consent-based control
+
+- A live shared screen automatically becomes the primary stage; participant cameras remain in a thumbnail filmstrip.
+- When no one is sharing, the current LiveKit active speaker becomes the primary video (and updates when the speaker changes).
+- Remote mouse/keyboard takeover is **not enabled by browser screen sharing**. Implementing real takeover requires an authenticated, opt-in desktop agent, explicit per-session approval by the sharer, and immediate revocation. Track this separately in [issue #66](https://github.com/Ceyeberkepp/NovaNexus/issues/66). No silent control is permitted.
+
 ## Workspace functionality
 
 The original visual design is retained and gradually connected to working APIs:
