@@ -1,7 +1,7 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {ParticipantTile,RoomAudioRenderer,TrackToggle,useTracks,useParticipants,useRoomContext,Chat} from '@livekit/components-react';
 import {Track,RoomEvent} from 'livekit-client';
-import {Mic,Video,MonitorUp,MessageCircle,Users,MoreVertical,PhoneOff,Disc,X,Grid2X2,Activity} from 'lucide-react';
+import {Mic,Video,MonitorUp,MessageCircle,Users,MoreVertical,PhoneOff,Disc,X,Grid2X2,Activity,Maximize2,Minimize2} from 'lucide-react';
 import MeetingDiagnostics from './MeetingDiagnostics';
 import {selectStage} from './meeting-stage.mjs';
 import MobileAudioOutput from './MobileAudioOutput';
@@ -10,6 +10,21 @@ import './conference.css';
 // All participant tiles come from authenticated LiveKit tracks, never demo state.
 export default function ConferenceStage({roomId,onEnd}){
  const room=useRoomContext();
+ const stageRef=useRef(null);
+ const [fullscreen,setFullscreen]=useState(false);
+ const [fullscreenError,setFullscreenError]=useState('');
+ useEffect(()=>{const update=()=>setFullscreen(document.fullscreenElement===stageRef.current);document.addEventListener('fullscreenchange',update);return()=>document.removeEventListener('fullscreenchange',update)},[]);
+ async function toggleFullscreen(){
+  setFullscreenError('');
+  try{
+   if(document.fullscreenElement){await document.exitFullscreen();return;}
+   if(!stageRef.current?.requestFullscreen)throw new Error('Fullscreen is unavailable in this browser. Rotate your phone to landscape.');
+   await stageRef.current.requestFullscreen();
+   // Orientation locking is optional and may require fullscreen and user permission.
+   try{await screen.orientation?.lock?.('landscape')}catch{}
+  }catch(e){setFullscreenError(e?.message||'Fullscreen is unavailable. Rotate your phone to landscape.');}
+ }
+
  const tracks=useTracks([{source:Track.Source.Camera,withPlaceholder:true},{source:Track.Source.ScreenShare,withPlaceholder:false}]);
  const participants=useParticipants();
  const [drawer,setDrawer]=useState('');
@@ -26,14 +41,16 @@ export default function ConferenceStage({roomId,onEnd}){
  const leave=async()=>{try{await room.disconnect()}finally{onEnd?.()}};
  return <div className="nexus-conference-stage" data-lk-theme="default">
    <header className="nexus-video-label"><span className="nexus-live-dot"/> {label} <span className="nexus-stage-count">{participants.length} participant{participants.length===1?'':'s'}</span></header>
-   <div className={'nexus-video-area '+(drawer?'nexus-with-drawer':'')}>
+   <div ref={stageRef} className={'nexus-video-area '+(drawer?'nexus-with-drawer':'')+(fullscreen?' nexus-fullscreen-share':'')}>
+     {stage.mode==='screen'&&<button type="button" className="nexus-share-fullscreen-button" aria-label={fullscreen?'Exit shared screen fullscreen':'View shared screen fullscreen'} onClick={toggleFullscreen}>{fullscreen?<Minimize2 size={17}/>:<Maximize2 size={17}/>}<span>{fullscreen?'Exit fullscreen':'Fullscreen'}</span></button>}
+     {fullscreenError&&<p role="alert" className="nexus-fullscreen-error">{fullscreenError}</p>}
      <div className="nexus-stage-layout" data-stage-mode={stage.mode}>
-       <div className="nexus-primary-stage" aria-label={stage.mode==='screen'?'Shared screen in main view':'Active speaker in main view'}>
+       {stage.mode==='screen'&&<div className="nexus-primary-stage" aria-label="Shared screen in main view">
          {stage.main?<ParticipantTile key={`${stage.main.participant?.identity||'participant'}:${stage.main.source}`} trackRef={stage.main}/>:<div className="nexus-stage-empty">Waiting for participants to connect…</div>}
-         {stage.mode==='screen'&&<div className="nexus-stage-mode-label">Screen sharing</div>}
-       </div>
-       {stage.filmstrip.length>0&&<div className="nexus-stage-filmstrip" aria-label="Other participants">
-         {stage.filmstrip.map(track=><div className="nexus-stage-thumbnail" key={`${track.participant?.identity||track.participant?.sid||'participant'}:${track.source}`}><ParticipantTile trackRef={track}/></div>)}
+         <div className="nexus-stage-mode-label">Screen sharing</div>
+       </div>}
+       {stage.filmstrip.length>0&&<div className={stage.mode==='grid'?'nexus-camera-grid':'nexus-stage-filmstrip'} aria-label="Participant cameras">
+         {stage.filmstrip.map(track=><div className={stage.mode==='grid'?'nexus-camera-grid-tile':'nexus-stage-thumbnail'} key={`${track.participant?.identity||track.participant?.sid||'participant'}:${track.source}`}><ParticipantTile trackRef={track}/></div>)}
        </div>}
      </div>
      <RoomAudioRenderer/>
@@ -48,7 +65,7 @@ export default function ConferenceStage({roomId,onEnd}){
      <TrackToggle source={Track.Source.Camera} showIcon={true} aria-label="Toggle camera" className="nexus-meeting-control"/>
      <TrackToggle source={Track.Source.ScreenShare} showIcon={true} aria-label="Share screen" className="nexus-meeting-control"/>
      <MobileAudioOutput/>
-     <span className="nexus-stage-toolbar-label" aria-live="polite">{stage.mode==='screen'?'Presenting screen':'Active speaker'}</span>
+     <span className="nexus-stage-toolbar-label" aria-live="polite">{stage.mode==='screen'?'Presenting screen':'Gallery view'}</span>
      <button aria-label="Call health and media diagnostics" title="Call health" aria-pressed={showDiagnostics} className={"nexus-meeting-control "+(showDiagnostics?"nexus-active":"")} onClick={()=>setShowDiagnostics(v=>!v)}><Activity size={18}/></button>
      <span className="nexus-control-divider"/>
      <button aria-label="Meeting chat" aria-pressed={drawer==='chat'} className={'nexus-meeting-control '+(drawer==='chat'?'nexus-active':'')} onClick={()=>setDrawer(d=>d==='chat'?'':'chat')}><MessageCircle size={19}/></button>
