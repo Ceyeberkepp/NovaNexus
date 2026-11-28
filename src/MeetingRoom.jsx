@@ -25,6 +25,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const recoveryPendingRef=useRef(false);
   const joinInFlightRef=useRef(false);
   const requestEpochRef=useRef(0);
+  const activeTokenRef=useRef(initialConnection?.token||null);
   const recoveringRef=useRef(false);
   const [reconnecting,setReconnecting]=useState(false);
   useEffect(()=>{activeRoomRef.current=true;return ()=>{activeRoomRef.current=false;requestEpochRef.current++;if(retryTimerRef.current)clearTimeout(retryTimerRef.current);if(stableTimerRef.current)clearTimeout(stableTimerRef.current)}},[]);
@@ -72,6 +73,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       // Cloudflare Tunnel overrides upstream Host to the appliance IP,
       // which must not be returned as a WebSocket destination to public
       // participants. Caddy proxies /rtc at this browser origin.
+      activeTokenRef.current=data.token;
       setConnection({...data,serverUrl:liveKitSignalingOrigin(window.location)});
       return true;
     }catch(err){if(activeRoomRef.current&&epoch===requestEpochRef.current)setError(err.message||'Video connection unavailable');return false;}
@@ -80,6 +82,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   const leave=()=>{
     activeRoomRef.current=false;
     requestEpochRef.current++;
+    activeTokenRef.current=null;
     if(retryTimerRef.current){clearTimeout(retryTimerRef.current);retryTimerRef.current=null;}
     if(stableTimerRef.current){clearTimeout(stableTimerRef.current);stableTimerRef.current=null;}
     recoveryPendingRef.current=false;
@@ -135,6 +138,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       audio={audioOnly?true:(prefs.callMicEnabled===false?false:{echoCancellation:prefs.callEchoCancellation!==false,noiseSuppression:prefs.callNoiseSuppression!==false,...(prefs.callAudioDevice?{deviceId:prefs.callAudioDevice}:{})})}
       video={audioOnly?false:prefs.callCamEnabled===false?false:{resolution:({ '360p':{width:640,height:360}, '720p':{width:1280,height:720}, '1080p':{width:1920,height:1080}}[prefs.callQuality]||{width:1280,height:720}),...(prefs.callVideoDevice?{deviceId:prefs.callVideoDevice}:{})}}
       onConnected={()=>{
+        if(activeTokenRef.current!==connection.token)return;
         connectedRef.current=true;
         recoveryPendingRef.current=false;
         // A short-lived ICE connection is not proof of stability. Do not
@@ -149,8 +153,9 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
         setReconnecting(false);
         setError('');
       }}
-      onDisconnected={()=>recoverConnection('Media session disconnected. Nexus is attempting to rejoin. Check Call health for remote track status.')}
+      onDisconnected={()=>{if(activeTokenRef.current===connection.token)recoverConnection('Media session disconnected. Nexus is attempting to rejoin. Check Call health for remote track status.')}}
       onError={e=>{
+        if(activeTokenRef.current!==connection.token)return;
         const raw=String(e?.message||'Connection failed').slice(0,300);
         // LiveKit can report a transient media/device failure while its own
         // ICE reconnection logic is still running. Do not unmount the room
