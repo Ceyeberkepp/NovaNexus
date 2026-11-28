@@ -4,6 +4,6 @@ export function selectStage(tracks, activeSpeakers, screenSource='screen_share',
  const available = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
  const cameras = available.filter(t=>t.source===cameraSource);
  const screen = available.find(t=>t.source===screenSource && t.publication && !t.publication.isMuted && t.publication.track);
- if (screen) return {main:screen, filmstrip:cameras, mode:'screen'};
+ if (screen) return {main:screen, filmstrip:[], mode:'screen'};
  return {main:null, filmstrip:cameras, mode:'grid'};
 }
