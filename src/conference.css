@@ -84,3 +84,28 @@
  .nexus-conference-stage .nexus-meeting-control{height:34px!important;width:34px!important;min-width:34px!important}
  .nexus-end-call{height:34px}
 }
+
+/* All shared screens occupy the complete conference viewport, desktop and mobile.
+   Keep the stream's aspect ratio to prevent cropping important shared content. */
+.nexus-video-area:has(.nexus-stage-layout[data-stage-mode="screen"]){
+ inset:0!important;
+ right:0!important;
+ padding:0!important;
+ background:#090a0c;
+}
+.nexus-stage-layout[data-stage-mode="screen"]{gap:0;width:100%;height:100%}
+.nexus-stage-layout[data-stage-mode="screen"] .nexus-primary-stage{width:100%;height:100%;flex:1}
+.nexus-stage-layout[data-stage-mode="screen"] .nexus-primary-stage>.lk-participant-tile{
+ width:100%;height:100%;border:0!important;border-radius:0!important;
+}
+.nexus-stage-layout[data-stage-mode="screen"] .nexus-stage-filmstrip{display:none!important}
+.nexus-stage-layout[data-stage-mode="screen"] .lk-participant-tile video{width:100%;height:100%;object-fit:contain!important}
+.nexus-stage-layout[data-stage-mode="screen"] .nexus-stage-mode-label{top:12px;left:12px;right:auto}
+.nexus-conference-stage:has(.nexus-stage-layout[data-stage-mode="screen"]) .nexus-float-toolbar{
+ opacity:.88;transition:opacity .2s ease;
+}
+.nexus-conference-stage:has(.nexus-stage-layout[data-stage-mode="screen"]) .nexus-float-toolbar:hover,
+.nexus-conference-stage:has(.nexus-stage-layout[data-stage-mode="screen"]) .nexus-float-toolbar:focus-within{opacity:1}
+@media(max-width:800px){
+ .nexus-stage-layout[data-stage-mode="screen"] .nexus-stage-mode-label{display:none}
+}
