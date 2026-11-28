@@ -2,6 +2,7 @@ import React, {useEffect,useRef,useState} from 'react';
 import {LiveKitRoom, useRoomContext} from '@livekit/components-react';
 import ConferenceStage from './ConferenceStage';
 import {liveKitSignalingOrigin} from './meeting-origin.mjs';
+import {mayStartJoin,acceptJoinResponse,recoveryDelayMs} from './meeting-reconnect.mjs';
 import VideoSettings from './VideoSettings';
 import MeetingExtras from './MeetingExtras';
 import {readChatPreferences} from './ChatPreferences';
@@ -44,7 +45,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
   async function join(breakoutID=0,useServerCapacity=false) {
     // Never issue overlapping room tokens: duplicate identities can displace
     // the active LiveKit publisher and trigger another ICE restart.
-    if(joinInFlightRef.current || !activeRoomRef.current)return false;
+    if(!mayStartJoin({active:activeRoomRef.current,inFlight:joinInFlightRef.current}))return false;
     if(!/^[0-9]{8}$/.test(roomId||'')) {
       setError('Meeting ID must be exactly 8 digits.');
       return;
@@ -65,7 +66,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
       });
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'Unable to join meeting');
-      if(!activeRoomRef.current || epoch!==requestEpochRef.current)return false;
+      if(!acceptJoinResponse({active:activeRoomRef.current,requestEpoch:epoch,currentEpoch:requestEpochRef.current}))return false;
       setActiveBreakoutId(breakoutID);
       // Use the hostname visible to the participant's browser. The
       // Cloudflare Tunnel overrides upstream Host to the appliance IP,
@@ -110,7 +111,7 @@ export default function MeetingRoom({roomId,user,onEnd,autoJoin=false,audioOnly=
         recoveryPendingRef.current=false;
         if(activeRoomRef.current)setReconnecting(false);
       }
-    },2500*attempt);
+    },recoveryDelayMs(attempt));
   }
   async function switchBreakout(id){
     if(id===activeBreakoutId)return;
