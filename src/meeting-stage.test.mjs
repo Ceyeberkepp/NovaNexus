@@ -13,7 +13,7 @@ for(const speakers of [[],[{identity:'bob'}],[{identity:'alice'}]]){
 }
 let view=selectStage([alice,bob,share],[{identity:'bob'}]);
 assert.equal(view.mode,'screen');assert.equal(view.main,share);
-assert.deepEqual(view.filmstrip,[alice,bob]);
+assert.deepEqual(view.filmstrip,[]);
 for(const unusable of [track('alice','screen_share',{muted:true}),track('alice','screen_share',{missing:true}),track('alice','screen_share',{placeholder:true})]){
  view=selectStage([alice,bob,unusable],[{identity:'bob'}]);
  assert.equal(view.mode,'grid');assert.deepEqual(view.filmstrip,[alice,bob]);
